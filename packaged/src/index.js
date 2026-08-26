@@ -16,6 +16,8 @@
  * 元数据读写走 fs 服务，注册走 workspaceRegistry。所有目录操作限 mock 根内。
  */
 
+import { readFile } from 'node:fs/promises'
+
 export function apply(ctx) {
   const errorText = (err) => (err && err.message ? String(err.message) : String(err))
 
@@ -325,6 +327,54 @@ export function apply(ctx) {
         return { ok: false, error: errorText(err) }
       }
     }, { authority: 'loopback' })
+  })
+
+  // ---- 官方 composer 解锁：内存补丁 conversation bundle（不落盘） ----
+  // 官方 ConversationRoot 把「有会话但无 workspace 归属」的空白会话判为
+  // inert（composer 退化成只读 workspace 选择器）。正常 UI 建不出这种状态，
+  // 只有本插件 session.create({ cwd }) 的批次会话会命中；bar 的发送链路全部
+  // 挂在 session 上，不碰 workspace。
+  // 这里注册 exact 路由（webServer 路由匹配 exact 优先于 client-modules 的
+  // /plugins 前缀路由），把 bundle 响应在内存里去掉 inert 的
+  // `hero && chipTitle === void 0` 臂并留下 marker。浏览器半边探测该 marker：
+  // 有则不注册手写接管框（官方 composer 已可用）；锚点漂移（dsh 升级后表达式
+  // 变了）时此处原样透传、探测不到 marker，自动回退手写接管框兜底。
+  const COMPOSER_PKG = '@deepseek-ai/dsh-client-ui-conversation'
+  const INERT_ANCHOR = 'sessionId === void 0 || hero && chipTitle === void 0'
+  const INERT_MARKER = 'dsh-mock-workspace:composer-unlocked'
+  const INERT_REPLACEMENT = `sessionId === void 0 /* ${INERT_MARKER} */`
+  ctx.inject(['webServer'], (webCtx) => {
+    return webCtx.webServer.register({
+      kind: 'exact',
+      path: '/plugins/' + COMPOSER_PKG + '/client.js',
+      handler: async (req, res) => {
+        if (req.method !== 'GET' && req.method !== 'HEAD') {
+          res.writeHead(405)
+          res.end()
+          return
+        }
+        try {
+          // 惰性解析：clientModules 启动顺序无关，且升级后自动跟随新 bundle。
+          const modules = ctx.get('clientModules')
+          const bundlePath = modules && typeof modules.clientPath === 'function'
+            ? modules.clientPath(COMPOSER_PKG)
+            : undefined
+          if (bundlePath === undefined) throw new Error('clientModules 未解析到 ' + COMPOSER_PKG)
+          let src = await readFile(bundlePath, 'utf8')
+          if (!src.includes(INERT_MARKER) && src.includes(INERT_ANCHOR)) {
+            src = src.replace(INERT_ANCHOR, INERT_REPLACEMENT)
+          }
+          res.writeHead(200, {
+            'content-type': 'text/javascript; charset=utf-8',
+            'cache-control': 'no-cache',
+          })
+          res.end(req.method === 'HEAD' ? undefined : src)
+        } catch (err) {
+          res.writeHead(500)
+          res.end('// dsh-mock-workspace: conversation bundle 补丁伺服失败: ' + errorText(err))
+        }
+      },
+    })
   })
 
   // 预热持久化配置（失败静默，退回默认根）。

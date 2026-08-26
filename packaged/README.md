@@ -48,6 +48,22 @@ cd packaged
 # 3. 重启 dsh —— 之后每次启动自动加载
 ```
 
+## 官方 composer 解锁（host 内存补丁，不落盘）
+
+官方 ConversationRoot 把「有会话但无 workspace 归属的空白会话」判为 inert
+（composer 退化成只读 workspace 选择器）——正常 UI 建不出这种状态，只有本
+插件的批次会话会命中。host 半边注册了一条 exact 路由
+`/plugins/@deepseek-ai/dsh-client-ui-conversation/client.js`（webServer 的
+路由匹配 exact 优先于 client-modules 的 `/plugins` 前缀路由），把 bundle 响应
+**在内存里**去掉 inert 的 `hero && chipTitle === void 0` 臂并留下
+`dsh-mock-workspace:composer-unlocked` marker，mock 空白会话因此获得
+**完整官方 InputBar**（模型/模式选择、@ 文件、/ 命令、图片附件）。
+
+- 不改磁盘上的任何 dsh 文件；bundle 路径经 clientModules 惰性解析，
+  **dsh 升级后自动跟随新 bundle，无需任何手工步骤**。
+- 锚点表达式漂移（官方改了 inert 计算）时原样透传官方 bundle；client 半边
+  探测不到 marker 会自动回退手写简易输入框兜底，首发消息永远可用。
+
 ## 验证
 
 重启后：

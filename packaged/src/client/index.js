@@ -245,7 +245,10 @@ function relativeTimeLabel(updatedAt) {
   return new Date(updatedAt).toLocaleDateString()
 }
 
-// ---- conversation.composer chain 接管：mock 空白会话的简易输入框 ----
+// ---- conversation.composer chain 接管（兜底）：mock 空白会话的简易输入框 ----
+// 首选路径是 host 半边的 bundle 内存补丁（src/index.js 的 exact 路由）：打过
+// 补丁后官方 composer 对无 workspace 空白会话直接可用，本接管不再注册。仅当
+// 探测不到补丁 marker 时（锚点漂移 / 路由未生效）才启用本兜底：
 // 官方 hero 输入框对「无工作区归属的空白会话」会退化成只读的工作区选择器
 // （选择即 attach，会话立刻脱离未分组，与 mock 的设计冲突）。这里通过官方
 // chain 槽接管：selector 命中（ConversationSnapshot.blank + 本插件认领）时
@@ -671,10 +674,24 @@ async function apply(ctx) {
       MockPanel,
     )))
     // chain 接管：mock 空白会话的 composer（详见 selectMockBlankComposer 注释）。
-    disposers.push(slots.inject('conversation.composer', () => slots.register(
-      { name: 'conversation.composer', select: selectMockBlankComposer, priority: 10 },
-      MockBlankComposer,
-    )))
+    // 仅作兜底：host 半边对官方 bundle 做了内存补丁（exact 路由，见
+    // src/index.js），打过补丁的响应带 'dsh-mock-workspace:composer-unlocked'
+    // marker，此时官方 composer 对无 workspace 空白会话已解锁，不再注册手写
+    // 接管框；探测不到 marker（锚点漂移 / 路由未生效）则回退手写接管框，
+    // 保证首发消息可用。
+    const registerFallbackComposer = () => {
+      disposers.push(slots.inject('conversation.composer', () => slots.register(
+        { name: 'conversation.composer', select: selectMockBlankComposer, priority: 10 },
+        MockBlankComposer,
+      )))
+    }
+    fetch('/plugins/@deepseek-ai/dsh-client-ui-conversation/client.js')
+      .then((res) => (res.ok ? res.text() : ''))
+      .then((src) => {
+        if (typeof src === 'string' && src.includes('dsh-mock-workspace:composer-unlocked')) return
+        registerFallbackComposer()
+      })
+      .catch(() => { registerFallbackComposer() })
     return () => {
       for (const d of disposers) {
         try { if (typeof d === 'function') d() } catch (e) { /* noop */ }
