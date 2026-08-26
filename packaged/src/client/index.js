@@ -14,7 +14,7 @@
 //   - 注册优先级显式 -1（正式包无动态 guard 的自动 shadowing 排序）。
 //
 // 面板职责：新建批次（query + skill 版本 → 独立目录 + 普通对话会话）、
-// 批次列表、会话（轨迹）入口、产物目录树、归档/删除。
+// 批次列表、会话（轨迹）入口。产物文件经由侧边栏「资源管理器」查看。
 
 function readJSON(key) {
   try {
@@ -70,12 +70,7 @@ const ICONS = {
   plus: 'M8 3 V13 M3 8 H13',
   refresh: 'M13.5 8 A5.5 5.5 0 1 1 11 4.3 M13.5 3 V5.5 H11',
   gear: 'M7 2.5 H9 L9.5 4.2 A4.5 4.5 0 0 1 11 5.1 L12.6 4.6 L13.6 6.4 L12.2 7.4 A4.5 4.5 0 0 1 12.2 8.6 L13.6 9.6 L12.6 11.4 L11 10.9 A4.5 4.5 0 0 1 9.5 11.8 L9 13.5 H7 L6.5 11.8 A4.5 4.5 0 0 1 5 10.9 L3.4 11.4 L2.4 9.6 L3.8 8.6 A4.5 4.5 0 0 1 3.8 7.4 L2.4 6.4 L3.4 4.6 L5 5.1 A4.5 4.5 0 0 1 6.5 4.2 Z M8 6 A2 2 0 1 0 8 10 A2 2 0 0 0 8 6 Z',
-  chevronRight: 'M6 3.5 L10 8 L6 12.5',
-  chevronDown: 'M3.5 6 L8 10 L12.5 6',
   folder: 'M2 4.5 A1.5 1.5 0 0 1 3.5 3 H5.8 L7.3 4.5 H12.5 A1.5 1.5 0 0 1 14 6 V11.5 A1.5 1.5 0 0 1 12.5 13 H3.5 A1.5 1.5 0 0 1 2 11.5 Z',
-  file: 'M4 2 H9 L12 5 V12.5 A1.5 1.5 0 0 1 10.5 14 H4 A1.5 1.5 0 0 1 2.5 12.5 V3.5 A1.5 1.5 0 0 1 4 2 Z M9 2 V5 H12',
-  archive: 'M3 4.5 H13 L12.5 12.5 A1 1 0 0 1 11.5 13.5 H4.5 A1 1 0 0 1 3.5 12.5 Z M4.5 7.5 H11.5',
-  trash: 'M3 4.5 H13 M6 4.5 V3.5 A1 1 0 0 1 7 2.5 H9 A1 1 0 0 1 10 3.5 V4.5 M4.5 4.5 L5.2 12.5 A1 1 0 0 0 6.2 13.5 H9.8 A1 1 0 0 0 10.8 12.5 L11.5 4.5',
 }
 
 const CSS = `
@@ -96,37 +91,26 @@ const CSS = `
 .dshmw-submit:disabled{opacity:.5;cursor:default}
 .dshmw-error{flex:none;font-size:11px;color:var(--dsw-alias-state-error-primary);overflow-wrap:break-word}
 .dshmw-list{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden}
-.dshmw-batch{width:100%;display:flex;align-items:center;gap:6px;min-height:34px;padding:0 8px;box-sizing:border-box;border:none;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:13px;text-align:left;border-radius:8px}
+.dshmw-batch{width:100%;display:flex;align-items:center;gap:6px;min-height:30px;margin-top:4px;padding:0 8px;box-sizing:border-box;border:none;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:13px;text-align:left;border-radius:8px}
 .dshmw-batch:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
-.dshmw-batch-open{background:var(--dsw-alias-bg-layer-1)}
-.dshmw-chev{flex:none;color:var(--dsw-alias-label-secondary);transition:transform .15s ease}
-.dshmw-chev-open{transform:rotate(90deg)}
-.dshmw-batchicon{flex:none;color:var(--dsw-alias-label-secondary)}
+.dshmw-batchicon{flex:none;align-self:flex-start;margin-top:2px;color:var(--dsw-alias-label-secondary)}
 .dshmw-batchmain{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
 .dshmw-batchtitle{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:13px}
 .dshmw-batchmeta{display:flex;align-items:center;gap:6px;font-size:11px;opacity:.75;min-width:0}
 .dshmw-badge{flex:none;border-radius:4px;padding:0 5px;font-size:10px;line-height:16px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:120px}
 .dshmw-badge-archived{opacity:.55}
 .dshmw-count{flex:none;font-size:11px;opacity:.75}
-.dshmw-batchbody{padding:0 0 4px 24px;box-sizing:border-box}
-.dshmw-section{font-size:11px;font-weight:600;letter-spacing:0.03em;color:var(--dsw-alias-label-secondary);padding:6px 8px 2px}
+.dshmw-batchbody{padding:0 0 4px 12px;box-sizing:border-box}
+.dshmw-sessplus{flex:none;width:8px;height:8px;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-secondary)}
 .dshmw-sess{display:flex;align-items:center;gap:6px;width:100%;height:28px;border:none;border-radius:6px;padding:0 8px;box-sizing:border-box;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:12px;text-align:left}
 .dshmw-sess:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
 .dshmw-sessdot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-state-success-primary)}
 .dshmw-sessname{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .dshmw-sessmeta{flex:none;font-size:11px;opacity:.7;max-width:40%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.dshmw-filerow{display:flex;align-items:center;gap:4px;width:100%;height:26px;border:none;border-radius:6px;padding:0 8px;box-sizing:border-box;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:12px;text-align:left}
-.dshmw-filerow:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
-.dshmw-fileicon{flex:none;color:var(--dsw-alias-label-secondary)}
-.dshmw-filename{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .dshmw-status{display:flex;align-items:center;gap:8px;min-height:26px;padding:4px 8px;box-sizing:border-box;color:var(--dsw-alias-label-secondary);font-size:12px}
 .dshmw-err{flex:1;min-width:0;color:var(--dsw-alias-state-error-primary);overflow-wrap:break-word}
 .dshmw-retry{flex:none;border:none;border-radius:6px;padding:2px 8px;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:12px}
 .dshmw-retry:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
-.dshmw-actions{display:flex;gap:4px;padding:2px 8px 6px}
-.dshmw-action{flex:none;border:none;border-radius:6px;padding:3px 8px;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:11px}
-.dshmw-action:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
-.dshmw-action-danger:hover{background:var(--dsw-alias-state-error-primary);color:var(--dsw-alias-label-primary)}
 .dshmw-empty{padding:16px 12px;color:var(--dsw-alias-label-secondary);font-size:13px}
 .dshmw-hint{margin-top:4px;font-size:12px;opacity:.75}
 .dshmw-rootpath{flex:none;padding:0 8px 4px;font-size:11px;opacity:.6;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--dsw-alias-label-secondary)}
@@ -164,9 +148,6 @@ function rpcCall(endpoint, payload) {
 }
 const listBatches = () => rpcCall('list-batches')
 const createBatch = (name) => rpcCall('create-batch', { name })
-const archiveBatch = (path) => rpcCall('archive-batch', { path })
-const deleteBatch = (path) => rpcCall('delete-batch', { path })
-const listDirectory = (path) => rpcCall('list-directory', { path })
 const getConfig = () => rpcCall('get-config')
 const setConfig = (root) => rpcCall('set-config', { root })
 
@@ -222,11 +203,6 @@ function pickDirectory() {
 function openSession(id) {
   const s = ctxRef.get('sessions')
   if (s && typeof s.open === 'function') s.open(id)
-}
-function openPath(path) {
-  const w = ctxRef.get('workspaces')
-  if (w && typeof w.openPath === 'function') return w.openPath(path)
-  return Promise.reject(new Error('工作区服务不可用'))
 }
 function forkSession(sessionId) {
   const s = ctxRef.get('sessions')
@@ -326,76 +302,6 @@ function MockIcon(props) {
   }, React.createElement(SvgIcon, { d: ICONS.beaker, size: props.wide ? 16 : 18 }))
 }
 
-// ---- 产物目录树（懒加载） ----
-function DirTree(props) {
-  const path = props.path
-  const depth = props.depth || 0
-  const [state, setState] = React.useState({ loaded: false, loading: false, error: null, entries: [], expanded: {} })
-
-  const load = React.useCallback(() => {
-    setState((s) => ({ ...s, loading: true, error: null }))
-    listDirectory(path).then((res) => {
-      setState({ loaded: true, loading: false, error: null, entries: res.entries || [], expanded: {} })
-    }, (err) => {
-      setState((s) => ({ ...s, loading: false, error: err.message || String(err) }))
-    })
-  }, [path])
-
-  React.useEffect(() => {
-    if (!state.loaded && !state.loading && state.error === null) load()
-  }, [state.loaded, state.loading, state.error, load])
-
-  const indent = { paddingLeft: 8 + depth * 12 }
-  if (!state.loaded && state.error !== null) {
-    return React.createElement('div', { className: 'dshmw-status', style: indent },
-      React.createElement('span', { className: 'dshmw-err', role: 'alert' }, state.error),
-      React.createElement('button', { type: 'button', className: 'dshmw-retry', onClick: load }, '重试'))
-  }
-  if (!state.loaded) {
-    return React.createElement('div', { className: 'dshmw-status', style: indent }, '加载产物…')
-  }
-  if (state.entries.length === 0) {
-    return React.createElement('div', { className: 'dshmw-status', style: indent }, '暂无产物文件')
-  }
-  const rows = []
-  state.entries.forEach((entry) => {
-    if (entry.kind === 'directory') {
-      const open = state.expanded[entry.path] === true
-      rows.push(React.createElement('div', { key: entry.path },
-        React.createElement('button', {
-          type: 'button',
-          className: 'dshmw-filerow',
-          style: indent,
-          'aria-expanded': open,
-          onClick: () => {
-            setState((s) => {
-              const expanded = Object.assign({}, s.expanded)
-              if (open) delete expanded[entry.path]
-              else expanded[entry.path] = true
-              return { ...s, expanded }
-            })
-          },
-        },
-          React.createElement(SvgIcon, { className: 'dshmw-fileicon', d: open ? ICONS.chevronDown : ICONS.chevronRight, size: 12 }),
-          React.createElement(SvgIcon, { className: 'dshmw-fileicon', d: ICONS.folder, size: 14 }),
-          React.createElement('span', { className: 'dshmw-filename' }, entry.name)),
-        open ? React.createElement(DirTree, { path: entry.path, depth: depth + 1 }) : null))
-    } else {
-      rows.push(React.createElement('button', {
-        key: entry.path,
-        type: 'button',
-        className: 'dshmw-filerow',
-        style: indent,
-        onClick: () => { openPath(entry.path).catch(() => {}) },
-      },
-        React.createElement('span', { className: 'dshmw-fileicon', style: { width: 12 } }),
-        React.createElement(SvgIcon, { className: 'dshmw-fileicon', d: ICONS.file, size: 14 }),
-        React.createElement('span', { className: 'dshmw-filename' }, entry.name)))
-    }
-  })
-  return React.createElement(React.Fragment, null, rows)
-}
-
 // ---- 新建批次表单（只需一个名字） ----
 function NewBatchForm(props) {
   const [name, setName] = React.useState('')
@@ -484,37 +390,46 @@ function SettingsForm(props) {
     error ? React.createElement('div', { className: 'dshmw-error', role: 'alert' }, error) : null)
 }
 
-// ---- 批次行（展开：会话 + 产物 + 操作） ----
+// ---- 批次行（固定展开：会话列表 + 末尾「新会话」入口） ----
 function BatchRow(props) {
   const batch = props.batch
   const sessionsById = props.sessionsById
-  const current = props.current
-  const [open, setOpen] = React.useState(false)
-  const [confirmDelete, setConfirmDelete] = React.useState(false)
 
   const meta = batch.meta || {}
   const title = batch.title || meta.name || batch.batchId || '批次'
-  const archived = meta.status === 'archived'
   const sessionIds = (batch.sessionIds || []).filter((id) => sessionsById[id] !== undefined)
+  const [open, setOpen] = React.useState(true)
 
-  const body = open ? React.createElement('div', { className: 'dshmw-batchbody' },
-    React.createElement('div', { className: 'dshmw-section' }, '会话（轨迹）'),
-    React.createElement('div', { className: 'dshmw-actions', style: { paddingTop: 0 } },
-      React.createElement('button', {
-        type: 'button',
-        className: 'dshmw-action',
-        title: '在该批次目录新建一个对话会话',
-        onClick: () => {
-          startBatchSession(batch.path)
-            .then(() => props.onChanged())
-            .catch((err) => console.warn(err))
-        },
-      },
-        React.createElement(SvgIcon, { d: ICONS.plus, size: 11 }),
-        ' 新会话')),
-    sessionIds.length === 0
-      ? React.createElement('div', { className: 'dshmw-status' }, '该批次还没有会话')
-      : sessionIds.map((id) => {
+  const newSessionRow = React.createElement('button', {
+    type: 'button',
+    className: 'dshmw-sess',
+    title: '在该批次目录新建一个对话会话',
+    onClick: () => {
+      startBatchSession(batch.path)
+        .then(() => props.onChanged())
+        .catch((err) => console.warn(err))
+    },
+  },
+    React.createElement('span', { className: 'dshmw-sessplus' },
+      React.createElement(SvgIcon, { d: ICONS.plus, size: 11 })),
+    React.createElement('span', { className: 'dshmw-sessname' }, '新会话'))
+
+  return React.createElement('div', null,
+    React.createElement('button', {
+      type: 'button',
+      className: 'dshmw-batch',
+      'aria-expanded': open,
+      title: open ? '折叠会话列表' : '展开会话列表',
+      onClick: () => { setOpen(!open) },
+    },
+      React.createElement(SvgIcon, { className: 'dshmw-batchicon', d: ICONS.folder, size: 14 }),
+      React.createElement('span', { className: 'dshmw-batchmain' },
+        React.createElement('span', { className: 'dshmw-batchtitle' }, title),
+        React.createElement('span', { className: 'dshmw-batchmeta' },
+          React.createElement('span', { className: 'dshmw-count' }, sessionIds.length + ' 会话')))),
+    open ? React.createElement('div', { className: 'dshmw-batchbody' },
+      newSessionRow,
+      sessionIds.map((id) => {
         const sum = sessionsById[id]
         return React.createElement('button', {
           key: id,
@@ -531,41 +446,7 @@ function BatchRow(props) {
             : React.createElement('span', { className: 'dshmw-sessdot', style: { background: 'transparent' } }),
           React.createElement('span', { className: 'dshmw-sessname' }, sum.blank ? '新会话' : (sum.displayTitle || sum.title || id)),
           React.createElement('span', { className: 'dshmw-sessmeta' }, relativeTimeLabel(sum.updatedAt)))
-      }),
-    React.createElement('div', { className: 'dshmw-section' }, '产物'),
-    React.createElement(DirTree, { path: batch.path, depth: 0 }),
-    React.createElement('div', { className: 'dshmw-actions' },
-      React.createElement('button', {
-        type: 'button',
-        className: 'dshmw-action',
-        onClick: () => { archiveBatch(batch.path).then(() => props.onChanged()).catch((err) => console.warn(err)) },
-      }, '归档'),
-      React.createElement('button', {
-        type: 'button',
-        className: confirmDelete ? 'dshmw-action dshmw-action-danger' : 'dshmw-action',
-        onClick: () => {
-          if (!confirmDelete) { setConfirmDelete(true); return }
-          deleteBatch(batch.path)
-            .then(() => props.onChanged())
-            .catch((err) => console.warn(err))
-            .finally(() => setConfirmDelete(false))
-        },
-      }, confirmDelete ? '确认删除？' : '删除')),
-  ) : null
-
-  return React.createElement('div', null,
-    React.createElement('button', {
-      type: 'button',
-      className: open ? 'dshmw-batch dshmw-batch-open' : 'dshmw-batch',
-      onClick: () => { setOpen(!open) },
-    },
-      React.createElement(SvgIcon, { className: open ? 'dshmw-chev dshmw-chev-open' : 'dshmw-chev', d: ICONS.chevronRight, size: 14 }),
-      React.createElement(SvgIcon, { className: 'dshmw-batchicon', d: archived ? ICONS.archive : ICONS.beaker, size: 14 }),
-      React.createElement('span', { className: 'dshmw-batchmain' },
-        React.createElement('span', { className: 'dshmw-batchtitle' }, title),
-        React.createElement('span', { className: 'dshmw-batchmeta' },
-          React.createElement('span', { className: 'dshmw-count' }, sessionIds.length + ' 会话')))),
-    body)
+      })) : null)
 }
 
 // ---- panel entry ----
