@@ -1,9 +1,9 @@
 // dsh-mock-workspace — runtime plugin Client half.
 // 在左侧边栏注册第三个 tab「Mock」（id: mock，order: 3）：临时实验场面板。
 // 面板职责（只做入口与组织，不做自动执行）：
-//   - 「+ 新建」：输入名字 → Host 建 runs/<batch>/ 目录 +
-//     meta.json + 注册 workspace → 复用 connectWorkspace 开一个 cwd 指向
-//     批次目录的普通对话会话（轨迹 = 会话日志，产物 = 会话生成的文件）
+//   - 「+ 新建」：输入名字 → Host 建 runs/<batch>/ 目录 + meta.json →
+//     session.create({ cwd }) 开一个 cwd 指向批次目录的普通对话会话
+//     （轨迹 = 会话日志，产物 = 会话生成的文件；无 workspace 归属）
 //   - 批次列表：名字 / 时间 / 会话数，按时间倒序
 //   - 展开批次：会话列表（点击打开）+ 标题行末尾「+」新建会话；产物文件经由「资源管理器」查看
 //
@@ -186,9 +186,9 @@ return {
     }
 
     // ---- mock 会话集合：conversation.composer 接管选择器的认领依据 ----
-    // 只认历史遗留的无 workspace 归属会话；新版会话经 workspaces.create +
-    // connectWorkspace 创建、有 workspace 归属，由官方 composer 全功能接管，
-    // 本集合仅用于兜底旧会话。
+    // 只认本插件创建（或历史批次 cwd 关联）的会话；其他会话完全不受影响。
+    // 回填时顺带注销「workspace 归属」时期为批次目录注册的 workspace
+    // （删注册不删目录/日志，会话回落未分组，由本插件接管输入框认领）。
     const mockSessionIds = new Set()
     listBatches().then((res) => {
       const batches = (res && res.batches) || []
@@ -196,27 +196,27 @@ return {
         const ids = b.sessionIds || []
         for (const id of ids) mockSessionIds.add(id)
       }
+      const w = ctx.get('workspaces')
+      const list = w && w.list && typeof w.list.getSnapshot === 'function' ? w.list.getSnapshot() : null
+      const items = (list && list.items) || []
+      if (w && typeof w.delete === 'function') {
+        for (const b of batches) {
+          const ws = items.find((it) => it.path === b.path)
+          if (ws) w.delete(ws.workspaceId).catch(() => {})
+        }
+      }
     }).catch(() => {})
 
-    // 在批次目录开对话会话：workspaces.create({ path }) 幂等注册批次目录为
-    // workspace（命名为批次标题，避免会话面板出现裸 batchId 目录名）→
-    // connectWorkspace(workspaceId) 复用/新建该工作区的空白会话（cwd 自动指向
-    // 批次目录）→ sessions.open 打开。有 workspace 归属 → 官方 composer 提供
-    // 完整功能（模型/模式选择、@ 文件、/ 命令），无需 MockBlankComposer 接管。
-    function startBatchSession(batchPath, batchTitle) {
-      const w = ctx.get('workspaces')
-      if (!w || typeof w.create !== 'function' || typeof w.connectWorkspace !== 'function') {
-        return Promise.reject(new Error('工作区服务不可用'))
-      }
-      return w.create({ path: batchPath }).then((ws) => {
-        const workspaceId = ws && ws.workspaceId
-        if (!workspaceId) throw new Error('批次目录工作区注册失败')
-        const named = typeof batchTitle === 'string' && batchTitle !== '' && ws.title !== batchTitle && typeof w.rename === 'function'
-          ? w.rename(workspaceId, batchTitle).catch(() => {})
-          : Promise.resolve()
-        return named.then(() => w.connectWorkspace(workspaceId))
-      }).then((sessionId) => {
-        if (sessionId) openSession(sessionId)
+    // 在批次目录开一个普通对话会话：后端 session.create({ cwd }) 原子创建 cwd
+    // 指向批次目录的会话（无 workspace 归属 → 会话面板归入「未分组」，空白期
+    // 隐藏、首发消息后出现在未分组桶）→ sessions.open 打开。
+    function startBatchSession(batchPath) {
+      return apiCall('session.create', { cwd: batchPath }).then((value) => {
+        const sessionId = value && value.sessionId
+        if (sessionId) {
+          mockSessionIds.add(sessionId)
+          openSession(sessionId)
+        }
         return sessionId
       })
     }
@@ -239,21 +239,15 @@ return {
       return new Date(updatedAt).toLocaleDateString()
     }
 
-    // ---- conversation.composer chain 接管：仅兜底历史遗留的无归属空白会话 ----
-    // 新版 mock 会话有 workspace 归属，官方 composer 直接提供完整功能；这里
-    // 只接管「blank + 本插件认领 + 无 workspace 归属」的旧会话（官方 hero 输入框
-    // 对它们退化成只读工作区选择器）。首条消息发出后 blank=false，selector
-    // 停止匹配，官方 composer 自动回来。priority 10 排在官方 entry（-10/0/1）之后。
+    // ---- conversation.composer chain 接管：mock 空白会话的简易输入框 ----
+    // 官方 hero 输入框对「无工作区归属的空白会话」退化成只读工作区选择器；
+    // 此处接管 mock 空白会话的 composer，首条消息发出后官方 composer 自动
+    // 回来。priority 10 排在官方 entry（-10/0/1）之后。
     function selectMockBlankComposer(owner) {
       const session = owner && owner.session
       if (session === undefined || session === null) return null
       if (session.blank !== true) return null
       if (!mockSessionIds.has(session.sessionId)) return null
-      // 有 workspace 归属的会话交给官方 composer（完整功能）。
-      const w = ctx.get('workspaces')
-      const list = w && w.list && typeof w.list.getSnapshot === 'function' ? w.list.getSnapshot() : null
-      const items = list && list.items
-      if (items && items.some((ws) => (ws.sessionIds || []).indexOf(session.sessionId) >= 0)) return null
       return { sessionId: session.sessionId }
     }
 
@@ -336,9 +330,9 @@ return {
           setBusy(false)
           setName('')
           props.onCreated(res)
-          // 新建批次后直接在批次目录开会话：注册 workspace → connectWorkspace。
+          // 新建批次后直接在批次目录开会话：session.create({ cwd }) → 未分组。
           if (res.batchPath) {
-            startBatchSession(res.batchPath, name).catch((err) => {
+            startBatchSession(res.batchPath).catch((err) => {
               console.warn('start batch session failed:', err && err.message ? err.message : err)
             })
           }
@@ -438,7 +432,7 @@ return {
         className: 'dshmw-sess',
         title: '在该批次目录新建一个对话会话',
         onClick: () => {
-          startBatchSession(batch.path, title)
+          startBatchSession(batch.path)
             .then(() => props.onChanged())
             .catch((err) => console.warn(err))
         },

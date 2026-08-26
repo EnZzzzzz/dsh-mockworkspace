@@ -238,9 +238,8 @@ export function apply(ctx) {
             }
             await writeMeta(batchPath, meta)
 
-            // workspace 注册由 client 半边按需进行（workspaces.create +
-            // connectWorkspace，幂等）：有归属的会话才能获得官方 composer
-            // 的完整功能（模型/模式/@ 文件// 命令）。
+            // 不注册 workspace：会话由后端 session.create({ cwd }) 创建，cwd 指向
+            // 批次目录但没有 workspace 归属，默认会话面板把它们归入「未分组」。
             return { ok: true, batchId, batchPath, meta }
           }
           case 'list-batches': {
