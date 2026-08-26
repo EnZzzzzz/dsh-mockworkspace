@@ -1,0 +1,3 @@
+# 构建产物不入库（web 服务器按请求从磁盘读 bundle）
+packaged/lib/
+.DS_Store

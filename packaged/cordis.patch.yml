@@ -1,0 +1,8 @@
+# dsh-mock-workspace bundle patch: inserting this package into the web-app
+# client roster turns it into a `dsh.client` row — the modules node half scans
+# the row, serves /plugins/dsh-mock-workspace/client.js, and adds it to the
+# browser boot graph. The row's node half is the package's host apply (the
+# /mock loopback RPC channel).
+- insert:
+    - id: dsh-mock-workspace
+      name: 'dsh-mock-workspace'

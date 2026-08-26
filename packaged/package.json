@@ -1,0 +1,32 @@
+{
+  "name": "dsh-mock-workspace",
+  "description": "dsh Web UI plugin (formal installable bundle): adds a 'Mock 实验场' sidebar tab for query × skill-version experiments — each batch gets an isolated runs/<id>/ directory (meta.json + workspace registration) and a normal chat session whose cwd points at it. Trace = DSH session log, artifacts = files the session produces.",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime"
+      ],
+      "platform": "web"
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "license": "MIT",
+  "files": [
+    "lib",
+    "cordis.patch.yml"
+  ]
+}
