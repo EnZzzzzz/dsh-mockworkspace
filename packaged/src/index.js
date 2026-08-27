@@ -343,6 +343,17 @@ export function apply(ctx) {
   const INERT_ANCHOR = 'sessionId === void 0 || hero && chipTitle === void 0'
   const INERT_MARKER = 'dsh-mock-workspace:composer-unlocked'
   const INERT_REPLACEMENT = `sessionId === void 0 /* ${INERT_MARKER} */`
+  // 工作区 chip 置灰：mock 空白会话（有 cwd、无 workspace 归属）不允许再选
+  // 工作区——选择会把会话 attach 进工作区、脱离「未分组」，与 mock 设计冲突。
+  // 官方 UI 建不出「有 cwd 但无 workspace 归属」的会话，该条件即 mock 会话。
+  // 三处锚点缺一不可（原子替换）；任一漂移则整组跳过，chip 恢复原行为。
+  const CHIP_MARKER = 'dsh-mock-workspace:workspace-chip-locked'
+  const CHIP_SIG_ANCHOR = 'function WorkspaceChip({ buttonRef, label, menuOpen = false, onClick, t }) {'
+  const CHIP_SIG_REPLACEMENT = `function WorkspaceChip({ buttonRef, label, menuOpen = false, onClick, t, disabled = false }) { /* ${CHIP_MARKER} */`
+  const CHIP_PROP_ANCHOR = '"aria-expanded": menuOpen,'
+  const CHIP_PROP_REPLACEMENT = '"aria-expanded": menuOpen, disabled, title: disabled ? "Mock 会话固定使用批次目录，不可更换工作区" : void 0, style: disabled ? { opacity: 0.45 } : void 0,'
+  const CHIP_CALL_ANCHOR = 'label: chipTitle,'
+  const CHIP_CALL_REPLACEMENT = 'label: chipTitle, disabled: sessionWorkspace === void 0 && cwd !== void 0 && cwd !== "",'
   ctx.inject(['webServer'], (webCtx) => {
     return webCtx.webServer.register({
       kind: 'exact',
@@ -363,6 +374,15 @@ export function apply(ctx) {
           let src = await readFile(bundlePath, 'utf8')
           if (!src.includes(INERT_MARKER) && src.includes(INERT_ANCHOR)) {
             src = src.replace(INERT_ANCHOR, INERT_REPLACEMENT)
+          }
+          if (!src.includes(CHIP_MARKER)
+            && src.includes(CHIP_SIG_ANCHOR)
+            && src.includes(CHIP_PROP_ANCHOR)
+            && src.includes(CHIP_CALL_ANCHOR)) {
+            src = src
+              .replace(CHIP_SIG_ANCHOR, CHIP_SIG_REPLACEMENT)
+              .replace(CHIP_PROP_ANCHOR, CHIP_PROP_REPLACEMENT)
+              .replace(CHIP_CALL_ANCHOR, CHIP_CALL_REPLACEMENT)
           }
           res.writeHead(200, {
             'content-type': 'text/javascript; charset=utf-8',
