@@ -31,16 +31,23 @@ export function apply(ctx) {
   // ---- 路径工具 ----
   function workspaceRootFallback() {
     const sandboxPolicy = ctx.get('sandboxPolicy')
-    if (sandboxPolicy && typeof sandboxPolicy.workspaceRoot === 'string' && sandboxPolicy.workspaceRoot !== '') {
-      return sandboxPolicy.workspaceRoot
-    }
+    // host 平面无会话时 sandboxPolicy.workspaceRoot 是 process.cwd()（Electron
+    // 拉起时常为 '/'），对 mock 根无意义且有害（ensure-root 会 mkdir /runs），
+    // 只接受非根目录的路径，否则退回 FALLBACK_ROOT。
+    const wr = sandboxPolicy && typeof sandboxPolicy.workspaceRoot === 'string'
+      ? sandboxPolicy.workspaceRoot.replace(/[/\\]+$/, '')
+      : ''
+    if (wr !== '' && wr !== '/') return wr
     return FALLBACK_ROOT
   }
 
   // 内存缓存 + 文件配置读写。mockRoot() 同步返回缓存或默认值；配置的加载/保存
   // 在 apply 时异步预热（失败静默，退回默认），set-config 时同步写缓存再落盘。
+  // configLoaded 只在「读到确定结果」（文件存在并已解析，或确认文件不存在）后
+  // 置位：fs 未挂载、读取异常等瞬时失败不闩锁，下次 loadConfig 重试——否则
+  // 启动瞬间 fs 未就绪会把进程永久卡在默认根上（重启必现「根目录变 /」）。
   let cachedRoot = null
-  let configReady = false
+  let configLoaded = false
 
   function mockRoot() {
     if (cachedRoot !== null && cachedRoot !== '') return cachedRoot
@@ -48,22 +55,22 @@ export function apply(ctx) {
   }
 
   async function loadConfig() {
-    if (configReady) return
-    configReady = true
+    if (configLoaded) return
     if (CONFIG_PATH === null) return
     const fs = ctx.get('fs')
     if (fs === undefined) return
     try {
       const target = await fs.resolve(CONFIG_PATH)
       const info = await fs.stat(target)
-      if (info === undefined) return
+      if (info === undefined) { configLoaded = true; return }
       const text = await fs.readText(target)
       const parsed = JSON.parse(text)
       if (parsed && typeof parsed.root === 'string' && parsed.root !== '') {
         cachedRoot = parsed.root.replace(/[/\\]+$/, '')
       }
+      configLoaded = true
     } catch (err) {
-      // 配置读取失败静默：使用默认根
+      // 配置读取失败静默且不闩锁：使用默认根，下次调用重试
     }
   }
 
@@ -72,7 +79,7 @@ export function apply(ctx) {
     const fs = ctx.get('fs')
     if (fs === undefined) throw new Error('fs 服务不可用，无法保存配置')
     cachedRoot = root.replace(/[/\\]+$/, '')
-    configReady = true
+    configLoaded = true
     const target = await fs.resolve(CONFIG_PATH)
     await fs.writeText(target, JSON.stringify({ root: cachedRoot }, null, 2))
   }
@@ -194,6 +201,8 @@ export function apply(ctx) {
   ctx.inject(['connection'], (apiCtx) => {
     return apiCtx.connection.rpc.handle('/mock', async (endpoint, payload, _signal) => {
       const args = payload || {}
+      // 自愈：apply 预热时 fs 可能未挂载（启动早期），首次真实调用再补一次加载。
+      await loadConfig()
       try {
         switch (endpoint) {
           case 'get-config': {
