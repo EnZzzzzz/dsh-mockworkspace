@@ -129,12 +129,18 @@ const CSS = `
 .dshmw-empty{padding:16px 12px;color:var(--dsw-alias-label-secondary);font-size:13px}
 .dshmw-hint{margin-top:4px;font-size:12px;opacity:.75}
 .dshmw-rootpath{flex:none;padding:0 8px 4px;font-size:11px;opacity:.6;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--dsw-alias-label-secondary)}
-.dshmw-settings{border:1px solid var(--dsw-alias-border-l1);border-radius:8px;margin:0 8px 6px;padding:8px;display:flex;flex-direction:column;gap:6px;box-sizing:border-box}
-.dshmw-settingslabel{font-size:11px;font-weight:600;color:var(--dsw-alias-label-secondary)}
-.dshmw-settingsrow{display:flex;gap:6px}
-.dshmw-settingsrow .dshmw-input{flex:1;min-width:0}
-.dshmw-browse{flex:none;border:none;border-radius:6px;padding:5px 8px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);cursor:pointer;font-size:12px}
-.dshmw-browse:hover{background:var(--dsw-alias-bg-layer-2)}
+.dshmw-setrow{border-bottom:1px solid var(--dsw-alias-border-l2);padding:16px 0;display:flex;flex-direction:column;gap:8px}
+.dshmw-setrow-head{display:flex;align-items:center;gap:8px}
+.dshmw-setrow-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;padding-right:12px}
+.dshmw-setrow-title{color:var(--dsw-alias-label-primary);font-size:14px;font-weight:400;line-height:22px}
+.dshmw-setrow-desc{color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.dshmw-setrow-controls{display:flex;align-items:center;gap:6px}
+.dshmw-setinput{flex:1;min-width:0;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:13px;padding:7px 10px;font-family:inherit}
+.dshmw-setinput:focus{outline:none;border-color:var(--dsw-alias-border-l2)}
+.dshmw-setbtn{flex:none;border:none;border-radius:8px;padding:7px 12px;background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-primary);cursor:pointer;font-size:13px;font-family:inherit}
+.dshmw-setbtn:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dshmw-setbtn:disabled{opacity:.5;cursor:default}
+.dshmw-seterror{font-size:12px;color:var(--dsw-alias-state-error-primary);overflow-wrap:break-word}
 .dshmw-composer{box-sizing:border-box;width:100%;max-width:var(--dsh-composer-card-max-width,720px);margin:0 auto;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);border-radius:16px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;box-shadow:var(--dsw-shadow-lv2)}
 .dshmw-composerinput{width:100%;box-sizing:border-box;border:none;background:transparent;color:var(--dsw-alias-label-primary);font-size:14px;line-height:20px;font-family:inherit;resize:none;outline:none;min-height:60px}
 .dshmw-composerrow{display:flex;align-items:center;gap:8px}
@@ -371,11 +377,32 @@ function NewBatchForm(props) {
     error ? React.createElement('div', { className: 'dshmw-error', role: 'alert' }, error) : null)
 }
 
-// ---- 根目录设置表单 ----
-function SettingsForm(props) {
-  const [root, setRoot] = React.useState(props.rootPath || '')
+// ---- 根目录变更通知（设置对话框保存后，侧边栏面板同步刷新） ----
+// 模块级监听集合：MockRootSettingsRow 保存成功后调用 notifyRootChanged()，
+// MockPanel 在 mount 时注册一个 load 重跑，两边不共享 state。
+const rootListeners = new Set()
+function onRootChanged(fn) { rootListeners.add(fn); return () => { rootListeners.delete(fn) } }
+function notifyRootChanged(rootPath) {
+  for (const fn of rootListeners) { try { fn(rootPath) } catch (e) { /* noop */ } }
+}
+
+// ---- 根目录设置行（注册进系统设置对话框「通用」页，settings.general.item） ----
+function MockRootSettingsRow() {
+  const [root, setRoot] = React.useState('')
+  const [current, setCurrent] = React.useState('')
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState(null)
+
+  React.useEffect(() => {
+    let alive = true
+    getConfig().then((cfg) => {
+      if (!alive) return
+      const rp = cfg && typeof cfg.rootPath === 'string' ? cfg.rootPath : ''
+      setCurrent(rp)
+      setRoot(rp)
+    }).catch(() => {})
+    return () => { alive = false }
+  }, [])
 
   const save = (target) => {
     if (busy) return
@@ -383,7 +410,9 @@ function SettingsForm(props) {
     setError(null)
     setConfig(target).then((res) => {
       setBusy(false)
-      props.onSaved(res)
+      const rp = res && typeof res.rootPath === 'string' ? res.rootPath : target
+      setCurrent(rp)
+      notifyRootChanged(rp)
     }, (err) => {
       setBusy(false)
       setError(err.message || String(err))
@@ -395,24 +424,28 @@ function SettingsForm(props) {
     }).catch(() => {})
   }
 
-  return React.createElement('div', { className: 'dshmw-settings' },
-    React.createElement('div', { className: 'dshmw-settingslabel' }, 'Mock 根目录（批次保存在 <根>/runs/ 下）'),
-    React.createElement('div', { className: 'dshmw-settingsrow' },
+  return React.createElement('div', { className: 'dshmw-setrow' },
+    React.createElement('div', { className: 'dshmw-setrow-head' },
+      React.createElement('div', { className: 'dshmw-setrow-text' },
+        React.createElement('div', { className: 'dshmw-setrow-title' }, 'Mock 根目录'),
+        React.createElement('div', { className: 'dshmw-setrow-desc', title: current },
+          current ? ('批次保存在 ' + current + '/runs/ 下') : '尚未配置（默认使用当前会话工作区）'))),
+    React.createElement('div', { className: 'dshmw-setrow-controls' },
       React.createElement('input', {
-        className: 'dshmw-input',
+        className: 'dshmw-setinput',
         placeholder: '/绝对/路径/到/mock-工作区',
         value: root,
         onChange: (e) => { setRoot(e.target.value) },
         onKeyDown: (e) => { if (e.key === 'Enter' && !busy) save(root) },
       }),
-      React.createElement('button', { type: 'button', className: 'dshmw-browse', onClick: browse }, '浏览…'),
+      React.createElement('button', { type: 'button', className: 'dshmw-setbtn', onClick: browse }, '浏览…'),
       React.createElement('button', {
         type: 'button',
-        className: 'dshmw-submit',
+        className: 'dshmw-setbtn',
         disabled: busy,
         onClick: () => { save(root) },
       }, busy ? '保存中…' : '保存')),
-    error ? React.createElement('div', { className: 'dshmw-error', role: 'alert' }, error) : null)
+    error ? React.createElement('div', { className: 'dshmw-seterror', role: 'alert' }, error) : null)
 }
 
 // ---- 批次行（固定展开：会话列表 + 末尾「新会话」入口） ----
@@ -531,7 +564,6 @@ function MockPanel(props) {
 
   const sessions = props.useSessions ? props.useSessions((s) => s) : undefined
   const [showForm, setShowForm] = React.useState(false)
-  const [showSettings, setShowSettings] = React.useState(false)
   const [rootPath, setRootPath] = React.useState('')
   const [batches, setBatches] = React.useState(null)
   const [error, setError] = React.useState(null)
@@ -553,19 +585,18 @@ function MockPanel(props) {
 
   React.useEffect(() => { load() }, [load, reloadKey])
 
+  // 设置对话框里保存根目录后同步本面板（根路径显示 + 批次列表）。
+  React.useEffect(() => onRootChanged((rp) => {
+    if (typeof rp === 'string' && rp !== '') setRootPath(rp)
+    setReloadKey((k) => k + 1)
+  }), [])
+
   const sessionsById = (sessions && sessions.byId) || {}
   const current = sessions && sessions.current
 
   const header = React.createElement('div', { className: 'dshmw-header' },
     React.createElement('span', { className: 'dshmw-title' }, 'Mock 实验场'),
     React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 2 } },
-      React.createElement('button', {
-        type: 'button',
-        className: 'dshmw-headbtn',
-        title: '设置根目录',
-        'aria-label': '设置根目录',
-        onClick: () => { setShowSettings(!showSettings) },
-      }, React.createElement(SvgIcon, { d: ICONS.gear, size: 15 })),
       React.createElement('button', {
         type: 'button',
         className: 'dshmw-headbtn',
@@ -584,17 +615,6 @@ function MockPanel(props) {
         '新建')))
 
   const body = []
-  if (showSettings) {
-    body.push(React.createElement(SettingsForm, {
-      key: 'settings',
-      rootPath,
-      onSaved: (res) => {
-        setShowSettings(false)
-        if (res && typeof res.rootPath === 'string') setRootPath(res.rootPath)
-        setReloadKey((k) => k + 1)
-      },
-    }))
-  }
   if (showForm) {
     body.push(React.createElement(NewBatchForm, {
       key: 'form',
@@ -672,6 +692,12 @@ async function apply(ctx) {
     disposers.push(slots.inject('sidebar.panel', () => slots.register(
       { name: 'sidebar.panel', id: PANEL_ID, order: ORDER, priority: -1, inject: () => ({ panelId: PANEL_ID }) },
       MockPanel,
+    )))
+    // 系统设置对话框「通用」页里的「Mock 根目录」行（原侧边栏 gear 按钮的设置项挪到这里）。
+    // order 20 排在 language(0) / appearance(10) 之后。
+    disposers.push(slots.inject('settings.general.item', () => slots.register(
+      { name: 'settings.general.item', id: 'mock-root', order: 20 },
+      MockRootSettingsRow,
     )))
     // chain 接管：mock 空白会话的 composer（详见 selectMockBlankComposer 注释）。
     // 仅作兜底：host 半边对官方 bundle 做了内存补丁（exact 路由，见
