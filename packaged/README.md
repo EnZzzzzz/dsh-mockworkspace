@@ -105,18 +105,10 @@ Mock 根目录**可配置**，持久化在 `~/.dsh/mock-workspace.json`（`{"roo
 标签筛选浏览（sourceRef + prompt 预览，点击展开全文），集可删除（二次确认）。
 
 语义层：CaseSet / Case / Importer，导入时归一化、meta 不透明保留；存储与
-API 由 artifact-hub 承载（`<mock 根>/case-library/`，详见
+API 由 artifact-hub 承载（SQLite：`<mock 根>/case-library/library.db`，详见
 `../artifact-hub/README.md` 用例库一节）。自定义 CSV（如
 `playground/tubiao_pg/queries.csv`）与公开 benchmark 都走同一个通用结构化
 导入器——支持新 benchmark = 一组字段映射。
-
-## 接口 Mock（接口级 Mock）
-
-面板第三张卡片「接口 Mock」：批次选择器 + 用例列表（开/关切换、METHOD 徽章、
-路径、悬停编辑/删除）+ 内联新建/编辑表单（方法、路径、状态码、延迟、期望
-响应体、自定义响应头）。数据由 artifact-hub 承载：存批次目录
-`mock-cases.json`，启用用例即被伺服为 `http://127.0.0.1:4780/m/<batchId>/<path>`
-可调用的 Mock 接口（面板直连 Hub CORS API，不走 Host RPC）。
 
 ## 产物托管入口（artifact-hub）
 

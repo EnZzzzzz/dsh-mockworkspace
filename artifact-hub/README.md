@@ -73,28 +73,6 @@ node artifact-hub/server.mjs
 
 会话处于 running 时管理页每 4s 自动增量刷新轨迹。
 
-## Mock 用例（接口级 Mock 伺服）
-
-每个批次目录可存 `mock-cases.json`（用例跟随实验产物），Hub 提供 CRUD API
-并把启用用例伺服成真实可调用的 HTTP 接口：
-
-```
-GET    /api/cases?batchId=
-POST   /api/cases/create   { batchId, case }
-POST   /api/cases/update   { batchId, id, patch }
-POST   /api/cases/delete   { batchId, id }
-ANY    /m/<batchId>/<path>   ← Mock 调度入口
-```
-
-Case 字段：`{ name, method, path, status, delayMs, headers, body, enabled }`。
-匹配规则：`method` + `path` 精确匹配（`path` 支持 `/*` 尾通配做前缀匹配）；
-命中后按 `status` / `headers`（默认 `application/json`）/ `delayMs` 返回 `body`，
-未命中返回 404 并列出当前可用接口；同 `method+path` 只允许一条。
-`batchId` 必须是 `runs/` 下带 `meta.json` 的目录名（防越界）。
-
-管理入口：Mock 实验场侧边栏面板「接口 Mock」卡片（批次选择 + 开关 + 编辑），
-或直接调上述 API。
-
 ## 用例库（benchmark prompts）
 
 全局 prompt 用例库，**不属于任何批次**（批次是用例的运行结果）。语义层三层
@@ -113,8 +91,11 @@ Case 规范形态（导入时归一化）：
 - `tags`：扁平筛选维度（从映射指定列抽取）
 - `meta`：**不透明袋子**——原始行其余列原样保留，schema 不解释（评测/分析时取数）
 
-存储：`<mock 根>/case-library/<setId>/{ set.json, cases.jsonl }`（JSONL 追加
-友好，5000+ 行无压力；set.json 记 count / tagCounts / source.mapping）。
+存储：**SQLite**（`node:sqlite` 内置，零依赖，需 Node ≥22.5），单文件
+`<mock 根>/case-library/library.db`（WAL 模式，重启不丢）。三张表：
+`sets` / `cases`（`PRIMARY KEY (set_id, source_ref)` 即去重约束）/
+`case_tags`（标签筛选与计数的连接表）。旧版 `<setId>/{set.json, cases.jsonl}`
+目录在首次打开 DB 时自动迁移入库（幂等），原文件保留作历史备份。
 
 ```
 GET  /api/library/sets

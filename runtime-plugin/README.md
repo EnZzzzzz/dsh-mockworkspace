@@ -55,9 +55,8 @@ dsh-mockworkspace/                       ← Mock 根（当前会话工作区）
 Hub 在线状态（轮询 `http://127.0.0.1:4780/api/state`）。
 
 面板另有「用例库」卡片：benchmark prompt 用例集导入（CSV/JSONL/JSON，两步
-字段映射表单）+ 标签筛选浏览，数据存 mock 根 `case-library/`；以及「接口
-Mock」卡片：接口级 Mock 用例 CRUD + 开关，数据存批次目录 `mock-cases.json`，
-由 artifact-hub 伺服为 `/m/<batchId>/<path>` 真实接口。
+字段映射表单）+ 标签筛选浏览，数据存 mock 根 `case-library/library.db`
+（SQLite）。
 
 安全边界：所有目录操作经 `insideMockRoot()` 校验，只允许 mock 根（含 `runs/`）内
 的路径；删除前二次确认。

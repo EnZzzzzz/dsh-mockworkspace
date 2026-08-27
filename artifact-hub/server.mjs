@@ -19,9 +19,11 @@
 
 import http from 'node:http'
 import { spawn } from 'node:child_process'
+import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
+import { DatabaseSync } from 'node:sqlite'
 import { fileURLToPath } from 'node:url'
 
 const HUB_PORT = Number(process.env.ARTIFACT_HUB_PORT || 4780)
@@ -349,180 +351,140 @@ async function trajectoryEvents(sessionId) {
   return { entries, hasMore: value.hasMore === true }
 }
 
-// ---------------------------------------------------------------- Mock 用例
-// 每个批次目录存 mock-cases.json：{ cases: [Case] }，用例跟随实验产物。
-// Case: { id, name, method, path, status, delayMs, headers, body, enabled,
-//         createdAt, updatedAt }
-// 伺服：任意方法 /m/<batchId>/<path> 按 method+path 精确匹配（path 支持
-// /* 尾通配做前缀匹配），命中启用用例则按定义返回。
-
-const CASE_METHODS = new Set(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'])
-
-/** batchId 必须是 runs/ 下带 meta.json 的纯目录名（防越界）。 */
-async function resolveBatchDir(batchId) {
-  if (typeof batchId !== 'string' || !/^[\w.-]+$/.test(batchId)) return null
-  const dir = path.join(RUNS_DIR, batchId)
-  if (path.dirname(dir) !== RUNS_DIR) return null
-  const meta = await readJson(path.join(dir, 'meta.json'))
-  if (meta === null) return null
-  return dir
-}
-
-async function readCases(batchId) {
-  const dir = await resolveBatchDir(batchId)
-  if (dir === null) return null
-  const data = await readJson(path.join(dir, 'mock-cases.json'))
-  const cases = data && Array.isArray(data.cases) ? data.cases : []
-  return { dir, cases }
-}
-
-async function writeCases(dir, cases) {
-  await fsp.writeFile(path.join(dir, 'mock-cases.json'), JSON.stringify({ cases }, null, 2))
-}
-
-/** 入库前归一化；返回 { case } 或 { error }。 */
-function normalizeCase(input, existing) {
-  const src = input && typeof input === 'object' ? input : {}
-  const base = existing || {}
-  const method = String(src.method !== undefined ? src.method : base.method || 'GET').toUpperCase()
-  if (!CASE_METHODS.has(method)) return { error: '不支持的请求方法: ' + method }
-  let p = String(src.path !== undefined ? src.path : base.path || '')
-  if (p === '') return { error: '接口路径不能为空' }
-  if (!p.startsWith('/')) p = '/' + p
-  const status = Number(src.status !== undefined ? src.status : (base.status !== undefined ? base.status : 200))
-  if (!Number.isInteger(status) || status < 100 || status > 599) return { error: '状态码须为 100-599' }
-  const delayMs = Number(src.delayMs !== undefined ? src.delayMs : (base.delayMs !== undefined ? base.delayMs : 0))
-  const headers = (src.headers !== undefined ? src.headers : base.headers)
-  return {
-    case: {
-      id: base.id || 'case-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7),
-      name: String(src.name !== undefined ? src.name : base.name || '') || p,
-      method,
-      path: p,
-      status,
-      delayMs: Number.isFinite(delayMs) && delayMs > 0 ? Math.min(delayMs, 30000) : 0,
-      headers: headers && typeof headers === 'object' && !Array.isArray(headers) ? headers : {},
-      body: String(src.body !== undefined ? src.body : base.body || ''),
-      enabled: src.enabled !== undefined ? src.enabled === true : (base.enabled !== undefined ? base.enabled : true),
-      createdAt: base.createdAt || Date.now(),
-      updatedAt: Date.now(),
-    },
-  }
-}
-
-/** Mock 调度：/m/<batchId>/<rest...>，命中启用用例则按定义返回。 */
-async function serveMockCase(req, res, urlPath) {
-  const segments = urlPath.slice('/m/'.length).split('/').filter((s) => s !== '')
-  if (segments.length === 0) { sendJson(res, 404, { ok: false, error: '缺 batchId' }); return }
-  let batchId
-  try { batchId = decodeURIComponent(segments[0]) } catch { sendJson(res, 400, { ok: false, error: '非法 batchId' }); return }
-  const found = await readCases(batchId)
-  if (found === null) { sendJson(res, 404, { ok: false, error: '批次不存在: ' + batchId }); return }
-  const rest = '/' + segments.slice(1).map((s) => {
-    try { return decodeURIComponent(s) } catch { return s }
-  }).join('/')
-  const reqPath = rest === '/' ? '/' : rest.replace(/[/]+$/, '')
-
-  const hit = found.cases.find((c) => {
-    if (c.enabled !== true || c.method !== req.method) return false
-    if (c.path.endsWith('/*')) return reqPath.startsWith(c.path.slice(0, -1))
-    return c.path === reqPath
-  })
-  if (!hit) {
-    sendJson(res, 404, {
-      ok: false,
-      error: `无命中用例: ${req.method} ${reqPath}`,
-      available: found.cases.filter((c) => c.enabled).map((c) => c.method + ' ' + c.path),
-    })
-    return
-  }
-  if (hit.delayMs > 0) await new Promise((r) => setTimeout(r, hit.delayMs))
-  const headers = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-cache', 'x-mock-case': hit.id }
-  for (const k of Object.keys(hit.headers || {})) headers[k.toLowerCase()] = String(hit.headers[k])
-  res.writeHead(hit.status, headers)
-  res.end(req.method === 'HEAD' ? undefined : hit.body)
-}
-
-/** 用例 CRUD API 路由；命中返回 true。 */
-async function apiCases(req, res, u) {
-  const urlPath = u.pathname
-  if (urlPath === '/api/cases' && req.method === 'GET') {
-    const found = await readCases(u.searchParams.get('batchId') || '')
-    if (found === null) { sendJson(res, 404, { ok: false, error: '批次不存在' }); return true }
-    sendJson(res, 200, { ok: true, value: { cases: found.cases, mockBase: HUB_BASE + '/m/' + (u.searchParams.get('batchId') || '') } })
-    return true
-  }
-  if (urlPath === '/api/cases/create' && req.method === 'POST') {
-    const body = await readBody(req)
-    const found = await readCases(String(body.batchId || ''))
-    if (found === null) { sendJson(res, 404, { ok: false, error: '批次不存在' }); return true }
-    const norm = normalizeCase(body.case, null)
-    if (norm.error) { sendJson(res, 400, { ok: false, error: norm.error }); return true }
-    // 同 method+path 只允许一条启用定义之外的重复没有意义，直接拒绝
-    if (found.cases.some((c) => c.method === norm.case.method && c.path === norm.case.path)) {
-      sendJson(res, 409, { ok: false, error: `已存在 ${norm.case.method} ${norm.case.path}` }); return true
-    }
-    found.cases.push(norm.case)
-    await writeCases(found.dir, found.cases)
-    sendJson(res, 200, { ok: true, value: { case: norm.case } })
-    return true
-  }
-  if (urlPath === '/api/cases/update' && req.method === 'POST') {
-    const body = await readBody(req)
-    const found = await readCases(String(body.batchId || ''))
-    if (found === null) { sendJson(res, 404, { ok: false, error: '批次不存在' }); return true }
-    const idx = found.cases.findIndex((c) => c.id === body.id)
-    if (idx === -1) { sendJson(res, 404, { ok: false, error: '用例不存在' }); return true }
-    const patch = body.patch && typeof body.patch === 'object' ? body.patch : {}
-    const norm = normalizeCase(patch, found.cases[idx])
-    if (norm.error) { sendJson(res, 400, { ok: false, error: norm.error }); return true }
-    if (found.cases.some((c, i) => i !== idx && c.method === norm.case.method && c.path === norm.case.path)) {
-      sendJson(res, 409, { ok: false, error: `已存在 ${norm.case.method} ${norm.case.path}` }); return true
-    }
-    found.cases[idx] = norm.case
-    await writeCases(found.dir, found.cases)
-    sendJson(res, 200, { ok: true, value: { case: norm.case } })
-    return true
-  }
-  if (urlPath === '/api/cases/delete' && req.method === 'POST') {
-    const body = await readBody(req)
-    const found = await readCases(String(body.batchId || ''))
-    if (found === null) { sendJson(res, 404, { ok: false, error: '批次不存在' }); return true }
-    const next = found.cases.filter((c) => c.id !== body.id)
-    if (next.length === found.cases.length) { sendJson(res, 404, { ok: false, error: '用例不存在' }); return true }
-    await writeCases(found.dir, next)
-    sendJson(res, 200, { ok: true, value: { deleted: body.id } })
-    return true
-  }
-  return false
-}
 
 // ---------------------------------------------------------------- 用例库（benchmark prompts）
 // 全局 prompt 用例库，不属于任何批次（批次是用例的运行结果）。
-// 存储：<MOCK_ROOT>/case-library/<setId>/{ set.json, cases.jsonl }
 //   Case（导入时归一化，之后所有消费方只认这一种形态）:
 //     { id, setId, sourceRef, prompt, language, tags[], meta{}, createdAt }
 //     - prompt     唯一必填的一等公民
 //     - sourceRef  源数据集原始 id（去重 + 回溯纽带），缺失时退回 prompt 哈希
 //     - tags       扁平筛选维度（从指定列抽取）
 //     - meta       不透明袋子：原始行其余列原样保留，schema 不解释
-//   set.json:
-//     { id, name, source: { kind, path?, fileName?, mapping }, count, tagCounts, createdAt, updatedAt }
 // Importer 抽象 = parser(csv|jsonl|json) + 字段映射；公开 benchmark 支持即
 // 「预设字段映射」，不需要为每个 benchmark 写代码。
+//
+// 存储：SQLite（node:sqlite 内置，零依赖，需 Node ≥22.5），
+// 单文件 <MOCK_ROOT>/case-library/library.db（WAL），重启不丢。
+//   sets(id, name, source_json, created_at, updated_at)
+//   cases(set_id, source_ref, id, prompt, language, tags_json, meta_json, created_at)
+//         PRIMARY KEY (set_id, source_ref) ← 去重约束
+//   case_tags(set_id, tag, case_id)       ← 标签筛选/计数的连接表
+// 旧版 JSONL 存储（<setId>/{set.json,cases.jsonl}）在首次打开 DB 时自动迁移
+// 入库（按主键 OR IGNORE，幂等），原文件保留作历史备份。
 
 const LIBRARY_DIR = path.join(MOCK_ROOT, 'case-library')
+const LIBRARY_DB = path.join(LIBRARY_DIR, 'library.db')
 const LIBRARY_MAX_BYTES = 128 * 1024 * 1024
 const UPLOAD_MAX_BYTES = 64 * 1024 * 1024
 
-/** setId 必须是 case-library/ 下带 set.json 的纯目录名（防越界）。 */
-async function resolveSetDir(setId) {
+let libDb = null
+
+/** 打开（并初始化/迁移）用例库 DB。同步：DB 操作均为微秒级。 */
+function libOpen() {
+  if (libDb !== null) return libDb
+  fs.mkdirSync(LIBRARY_DIR, { recursive: true })
+  const db = new DatabaseSync(LIBRARY_DB)
+  db.exec('PRAGMA journal_mode = WAL')
+  db.exec(`CREATE TABLE IF NOT EXISTS sets (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT '{}',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`)
+  db.exec(`CREATE TABLE IF NOT EXISTS cases (
+    set_id TEXT NOT NULL,
+    source_ref TEXT NOT NULL,
+    id TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    language TEXT NOT NULL DEFAULT '',
+    tags TEXT NOT NULL DEFAULT '[]',
+    meta TEXT NOT NULL DEFAULT '{}',
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (set_id, source_ref)
+  )`)
+  db.exec(`CREATE TABLE IF NOT EXISTS case_tags (
+    set_id TEXT NOT NULL,
+    tag TEXT NOT NULL,
+    case_id TEXT NOT NULL,
+    PRIMARY KEY (set_id, tag, case_id)
+  )`)
+  db.exec('CREATE INDEX IF NOT EXISTS idx_case_tags_set ON case_tags(set_id, tag)')
+  migrateLegacyLibrary(db)
+  libDb = db
+  return db
+}
+
+/** 旧 JSONL 目录 → SQLite 一次性迁移（幂等，按主键去重）。 */
+function migrateLegacyLibrary(db) {
+  let entries = []
+  try { entries = fs.readdirSync(LIBRARY_DIR, { withFileTypes: true }) } catch { return }
+  const hasSet = db.prepare('SELECT 1 FROM sets WHERE id = ?')
+  const insSet = db.prepare('INSERT OR IGNORE INTO sets (id, name, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+  const insCase = db.prepare('INSERT OR IGNORE INTO cases (set_id, source_ref, id, prompt, language, tags, meta, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+  const insTag = db.prepare('INSERT OR IGNORE INTO case_tags (set_id, tag, case_id) VALUES (?, ?, ?)')
+  for (const e of entries) {
+    if (!e.isDirectory()) continue
+    const dir = path.join(LIBRARY_DIR, e.name)
+    let meta = null
+    try { meta = JSON.parse(fs.readFileSync(path.join(dir, 'set.json'), 'utf8')) } catch { continue }
+    let text = ''
+    try { text = fs.readFileSync(path.join(dir, 'cases.jsonl'), 'utf8') } catch { continue }
+    db.exec('BEGIN')
+    try {
+      insSet.run(e.name, String(meta.name || e.name), JSON.stringify(meta.source || {}),
+        Number(meta.createdAt) || Date.now(), Number(meta.updatedAt) || Date.now())
+      for (const line of text.split('\n')) {
+        const t = line.trim()
+        if (t === '') continue
+        let c
+        try { c = JSON.parse(t) } catch { continue }
+        if (!c || typeof c.prompt !== 'string' || c.prompt === '') continue
+        const ref = String(c.sourceRef || c.id || promptHash(c.prompt))
+        const r = insCase.run(e.name, ref, String(c.id || 'c-' + ref), c.prompt,
+          String(c.language || ''), JSON.stringify(Array.isArray(c.tags) ? c.tags : []),
+          JSON.stringify(c.meta && typeof c.meta === 'object' ? c.meta : {}),
+          Number(c.createdAt) || Date.now())
+        if (r.changes > 0) {
+          for (const tag of Array.isArray(c.tags) ? c.tags : []) insTag.run(e.name, String(tag), String(c.id || 'c-' + ref))
+        }
+      }
+      db.exec('COMMIT')
+      console.log(`[artifact-hub] 用例库迁移：${e.name} 入库完成`)
+    } catch (err) {
+      db.exec('ROLLBACK')
+      console.error(`[artifact-hub] 用例库迁移失败（${e.name}）:`, err.message)
+    }
+  }
+}
+
+function jsonParse(s, fallback) {
+  try { return JSON.parse(s) } catch { return fallback }
+}
+
+/** 集元信息视图（含实时 count / tagCounts）。 */
+function libSetView(db, row) {
+  const count = db.prepare('SELECT COUNT(*) AS n FROM cases WHERE set_id = ?').get(row.id).n
+  const tagCounts = {}
+  for (const r of db.prepare('SELECT tag, COUNT(*) AS n FROM case_tags WHERE set_id = ? GROUP BY tag').all(row.id)) {
+    tagCounts[r.tag] = r.n
+  }
+  return {
+    id: row.id,
+    name: row.name,
+    source: jsonParse(row.source, {}),
+    count,
+    tagCounts,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+/** setId 校验 + 取集；不存在返回 null。 */
+function libResolveSet(db, setId) {
   if (typeof setId !== 'string' || !/^[\w.-]+$/.test(setId)) return null
-  const dir = path.join(LIBRARY_DIR, setId)
-  if (path.dirname(dir) !== LIBRARY_DIR) return null
-  const meta = await readJson(path.join(dir, 'set.json'))
-  if (meta === null) return null
-  return { dir, meta }
+  const row = db.prepare('SELECT * FROM sets WHERE id = ?').get(setId)
+  return row || null
 }
 
 /** RFC-4180 CSV 解析（引号、转义引号、字段内换行、\r\n）。返回 string[][]。 */
@@ -715,36 +677,30 @@ async function readDatasetText(body) {
   }
 }
 
-async function loadSetCases(dir) {
-  let text = ''
-  try { text = await fsp.readFile(path.join(dir, 'cases.jsonl'), 'utf8') } catch { return [] }
-  const cases = []
-  for (const line of text.split('\n')) {
-    const t = line.trim()
-    if (t === '') continue
-    try { cases.push(JSON.parse(t)) } catch { /* 跳过坏行 */ }
+function libCaseView(row) {
+  return {
+    id: row.id,
+    setId: row.set_id,
+    sourceRef: row.source_ref,
+    prompt: row.prompt,
+    language: row.language,
+    tags: jsonParse(row.tags, []),
+    meta: jsonParse(row.meta, {}),
+    createdAt: row.created_at,
   }
-  return cases
 }
 
 /** 用例库 API 路由；命中返回 true。 */
 async function apiLibrary(req, res, u) {
   const urlPath = u.pathname
+  const db = libOpen()
   // 用例集列表
   if (urlPath === '/api/library/sets' && req.method === 'GET') {
-    const sets = []
-    let entries = []
-    try { entries = await fsp.readdir(LIBRARY_DIR, { withFileTypes: true }) } catch { entries = [] }
-    for (const e of entries) {
-      if (!e.isDirectory()) continue
-      const meta = await readJson(path.join(LIBRARY_DIR, e.name, 'set.json'))
-      if (meta !== null) sets.push(meta)
-    }
-    sets.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
-    sendJson(res, 200, { ok: true, value: { sets } })
+    const rows = db.prepare('SELECT * FROM sets ORDER BY updated_at DESC').all()
+    sendJson(res, 200, { ok: true, value: { sets: rows.map((r) => libSetView(db, r)) } })
     return true
   }
-  // 解析预览：返回列名 + 样例行 + 猜测映射（不写盘）
+  // 解析预览：返回列名 + 样例行 + 猜测映射（不写库）
   if (urlPath === '/api/library/preview' && req.method === 'POST') {
     const body = await readBody(req)
     const src = await readDatasetText(body)
@@ -773,7 +729,7 @@ async function apiLibrary(req, res, u) {
     })
     return true
   }
-  // 导入：归一化落库（setId 已存在则按 sourceRef 去重合并）
+  // 导入：归一化落库（setId 已存在则按 (set_id, source_ref) 主键去重合并）
   if (urlPath === '/api/library/import' && req.method === 'POST') {
     const body = await readBody(req)
     const mapping = body.mapping && typeof body.mapping === 'object' ? body.mapping : {}
@@ -790,80 +746,102 @@ async function apiLibrary(req, res, u) {
     }
     // 目标集：显式 setId 合并导入，否则按名称生成唯一 slug
     let setId = typeof body.setId === 'string' && /^[\w.-]+$/.test(body.setId) ? body.setId : ''
-    let existing = null
+    let setRow = null
     if (setId !== '') {
-      existing = await resolveSetDir(setId)
-      if (existing === null) { sendJson(res, 404, { ok: false, error: '用例集不存在: ' + setId }); return true }
+      setRow = libResolveSet(db, setId)
+      if (setRow === null) { sendJson(res, 404, { ok: false, error: '用例集不存在: ' + setId }); return true }
     } else {
       const base = slugifySetId(body.name || src.fileName.replace(/\.[^.]+$/, ''))
       setId = base
+      const exists = db.prepare('SELECT 1 FROM sets WHERE id = ?')
       for (let i = 2; ; i++) {
-        const clash = await readJson(path.join(LIBRARY_DIR, setId, 'set.json'))
-        if (clash === null) break
+        if (exists.get(setId) === undefined) break
         setId = base + '-' + i
       }
-      await fsp.mkdir(path.join(LIBRARY_DIR, setId), { recursive: true })
     }
-    const dir = path.join(LIBRARY_DIR, setId)
-    const cases = existing !== null ? await loadSetCases(dir) : []
-    const keys = new Set(cases.map((c) => c.sourceRef))
+    const now = Date.now()
+    const insSet = db.prepare('INSERT OR IGNORE INTO sets (id, name, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+    const insCase = db.prepare('INSERT OR IGNORE INTO cases (set_id, source_ref, id, prompt, language, tags, meta, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    const insTag = db.prepare('INSERT OR IGNORE INTO case_tags (set_id, tag, case_id) VALUES (?, ?, ?)')
     let imported = 0
     let skipped = 0
-    for (const obj of data.rows) {
-      const c = normalizeLibraryCase(obj, mapping, setId)
-      if (c === null) { skipped++; continue }
-      if (keys.has(c.sourceRef)) { skipped++; continue }
-      keys.add(c.sourceRef)
-      cases.push(c)
-      imported++
+    db.exec('BEGIN')
+    try {
+      insSet.run(setId, String(body.name || setId), JSON.stringify({
+        kind: data.kind, path: src.sourcePath, fileName: src.fileName, mapping,
+      }), now, now)
+      for (const obj of data.rows) {
+        const c = normalizeLibraryCase(obj, mapping, setId)
+        if (c === null) { skipped++; continue }
+        const r = insCase.run(c.setId, c.sourceRef, c.id, c.prompt, c.language,
+          JSON.stringify(c.tags), JSON.stringify(c.meta), c.createdAt)
+        if (r.changes > 0) {
+          for (const t of c.tags) insTag.run(c.setId, t, c.id)
+          imported++
+        } else {
+          skipped++
+        }
+      }
+      // 合并导入时更新名称/映射快照与 updated_at
+      db.prepare('UPDATE sets SET name = ?, source = ?, updated_at = ? WHERE id = ?').run(
+        String(body.name || (setRow && setRow.name) || setId),
+        JSON.stringify({ kind: data.kind, path: src.sourcePath, fileName: src.fileName, mapping }),
+        now, setId)
+      db.exec('COMMIT')
+    } catch (err) {
+      db.exec('ROLLBACK')
+      sendJson(res, 500, { ok: false, error: '导入失败: ' + errorText(err) })
+      return true
     }
-    const tagCounts = {}
-    for (const c of cases) {
-      for (const t of c.tags || []) tagCounts[t] = (tagCounts[t] || 0) + 1
-    }
-    const prevMeta = existing !== null ? existing.meta : null
-    const meta = {
-      id: setId,
-      name: String(body.name || (prevMeta && prevMeta.name) || setId),
-      source: {
-        kind: data.kind,
-        path: src.sourcePath,
-        fileName: src.fileName,
-        mapping,
-      },
-      count: cases.length,
-      tagCounts,
-      createdAt: (prevMeta && prevMeta.createdAt) || Date.now(),
-      updatedAt: Date.now(),
-    }
-    const jsonl = cases.map((c) => JSON.stringify(c)).join('\n') + '\n'
-    await fsp.writeFile(path.join(dir, 'cases.jsonl'), jsonl)
-    await fsp.writeFile(path.join(dir, 'set.json'), JSON.stringify(meta, null, 2))
+    const meta = libSetView(db, db.prepare('SELECT * FROM sets WHERE id = ?').get(setId))
     sendJson(res, 200, { ok: true, value: { set: meta, imported, skipped } })
     return true
   }
-  // 用例查询：tag / q（prompt 子串）筛选 + 分页
+  // 用例查询：tag / q（prompt、sourceRef 子串）筛选 + 分页
   if (urlPath === '/api/library/cases' && req.method === 'GET') {
-    const found = await resolveSetDir(u.searchParams.get('setId') || '')
-    if (found === null) { sendJson(res, 404, { ok: false, error: '用例集不存在' }); return true }
+    const setRow = libResolveSet(db, u.searchParams.get('setId') || '')
+    if (setRow === null) { sendJson(res, 404, { ok: false, error: '用例集不存在' }); return true }
     const tag = (u.searchParams.get('tag') || '').trim()
     const q = (u.searchParams.get('q') || '').trim().toLowerCase()
     const offset = Math.max(0, Number(u.searchParams.get('offset')) || 0)
     const limit = Math.min(200, Math.max(1, Number(u.searchParams.get('limit')) || 50))
-    let cases = await loadSetCases(found.dir)
-    if (tag !== '') cases = cases.filter((c) => (c.tags || []).includes(tag))
-    if (q !== '') cases = cases.filter((c) => String(c.prompt).toLowerCase().includes(q) || String(c.sourceRef).toLowerCase().includes(q))
-    const total = cases.length
-    sendJson(res, 200, { ok: true, value: { total, offset, limit, cases: cases.slice(offset, offset + limit), set: found.meta } })
+    const where = ['set_id = ?']
+    const params = [setRow.id]
+    if (tag !== '') {
+      where.push('EXISTS (SELECT 1 FROM case_tags t WHERE t.set_id = cases.set_id AND t.case_id = cases.id AND t.tag = ?)')
+      params.push(tag)
+    }
+    if (q !== '') {
+      where.push('(instr(lower(prompt), ?) > 0 OR instr(lower(source_ref), ?) > 0)')
+      params.push(q, q)
+    }
+    const cond = where.join(' AND ')
+    const total = db.prepare('SELECT COUNT(*) AS n FROM cases WHERE ' + cond).get(...params).n
+    const rows = db.prepare('SELECT * FROM cases WHERE ' + cond + ' ORDER BY created_at, source_ref LIMIT ? OFFSET ?')
+      .all(...params, limit, offset)
+    sendJson(res, 200, {
+      ok: true,
+      value: { total, offset, limit, cases: rows.map(libCaseView), set: libSetView(db, setRow) },
+    })
     return true
   }
   // 删除用例集
   if (urlPath === '/api/library/delete-set' && req.method === 'POST') {
     const body = await readBody(req)
-    const found = await resolveSetDir(String(body.setId || ''))
-    if (found === null) { sendJson(res, 404, { ok: false, error: '用例集不存在' }); return true }
-    await fsp.rm(found.dir, { recursive: true, force: true })
-    sendJson(res, 200, { ok: true, value: { deleted: found.meta.id } })
+    const setRow = libResolveSet(db, String(body.setId || ''))
+    if (setRow === null) { sendJson(res, 404, { ok: false, error: '用例集不存在' }); return true }
+    db.exec('BEGIN')
+    try {
+      db.prepare('DELETE FROM case_tags WHERE set_id = ?').run(setRow.id)
+      db.prepare('DELETE FROM cases WHERE set_id = ?').run(setRow.id)
+      db.prepare('DELETE FROM sets WHERE id = ?').run(setRow.id)
+      db.exec('COMMIT')
+    } catch (err) {
+      db.exec('ROLLBACK')
+      sendJson(res, 500, { ok: false, error: '删除失败: ' + errorText(err) })
+      return true
+    }
+    sendJson(res, 200, { ok: true, value: { deleted: setRow.id } })
     return true
   }
   return false
@@ -1226,9 +1204,6 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, { ok: true, value: await apiState() })
       return
     }
-    if (urlPath.startsWith('/api/cases')) {
-      if (await apiCases(req, res, u)) return
-    }
     if (urlPath.startsWith('/api/library')) {
       if (await apiLibrary(req, res, u)) return
     }
@@ -1261,10 +1236,6 @@ const server = http.createServer(async (req, res) => {
       if (sessionId === '') { sendJson(res, 400, { ok: false, error: '缺 sessionId' }); return }
       const value = await trajectoryEvents(sessionId)
       sendJson(res, 200, { ok: true, value })
-      return
-    }
-    if (urlPath.startsWith('/m/')) {
-      await serveMockCase(req, res, urlPath)
       return
     }
     if (urlPath.startsWith('/preview/')) {
