@@ -340,5 +340,73 @@ return {
       if (!insideMockRoot(path)) return { ok: false, error: '路径不在 mock 工作区内' }
       return listDirectory(path)
     })
+
+    // 产物托管 Hub（artifact-hub/server.mjs）管理页地址。
+    const HUB_URL = 'http://127.0.0.1:4780/'
+    // ---- RPC：手动拉起产物托管 Hub ----
+    // 动态插件沙箱无 process/child_process/fetch/定时器，用 shell 服务
+    // nohup 后台拉起（PATH 无 node，用 /usr/local/bin/node 绝对路径，兜底
+    // /opt/homebrew/bin/node），随后 curl 轮询就绪（最长 ~10s）。
+    harness.handle('mock.start-hub', async (args) => {
+      try {
+        if (shell === undefined) return { ok: false, error: 'shell 服务不可用' }
+        const root = workspaceRootFallback()
+        // 面板页与 apiproxy 同源，客户端传 location.origin 作为 Hub 的
+        // DSH_API（端口随 dsh 启动变化，server.mjs 的默认值会过期）。
+        const dshApi = args && typeof args.dshApi === 'string' && /^https?:\/\/127\.0\.0\.1:\d+$/.test(args.dshApi)
+          ? args.dshApi : ''
+        const run = async (command) => {
+          const request = { command }
+          let spec
+          try {
+            spec = shell.resolve(request)
+          } catch (err) {
+            spec = request
+          }
+          return shell.run(spec)
+        }
+        const probe = 'curl -sf -o /dev/null --max-time 2 ' + HUB_URL + 'api/state'
+        if ((await run(probe)).exitCode === 0) return { ok: true, already: true, url: HUB_URL }
+        const q = (s) => '"' + s.replace(/"/g, '\\"') + '"'
+        const log = q(root + '/artifact-hub/hub.log')
+        const script = 'NODE=/usr/local/bin/node; [ -x "$NODE" ] || NODE=/opt/homebrew/bin/node; ' +
+          (dshApi !== '' ? 'DSH_API=' + dshApi + ' ' : '') +
+          'nohup "$NODE" ' + q(root + '/artifact-hub/server.mjs') + ' >> ' + log + ' 2>&1 &'
+        const started = await run(script)
+        if (started.exitCode !== 0) {
+          return { ok: false, error: '拉起失败: ' + (started.stderr || started.stdout || 'unknown') }
+        }
+        for (let i = 0; i < 12; i++) {
+          if ((await run(probe)).exitCode === 0) return { ok: true, url: HUB_URL, ready: true }
+        }
+        return { ok: true, url: HUB_URL, ready: false }
+      } catch (err) {
+        return { ok: false, error: errorText(err) }
+      }
+    })
+
+    // ---- RPC：打开产物托管页（macOS `open` → 系统默认浏览器） ----
+    // args.select 为产物 id 时拼 ?select=<id> 深链，Hub 管理页自动选中该产物。
+    harness.handle('mock.open-hub', async (args) => {
+      try {
+        if (shell === undefined) return { ok: false, error: 'shell 服务不可用' }
+        const select = args && typeof args.select === 'string' && args.select !== '' ? args.select : ''
+        const url = HUB_URL + (select ? '?select=' + encodeURIComponent(select) : '')
+        const request = { command: 'open "' + url + '"' }
+        let spec
+        try {
+          spec = shell.resolve(request)
+        } catch (err) {
+          spec = request
+        }
+        const result = await shell.run(spec)
+        if (result.exitCode !== 0) {
+          return { ok: false, error: '打开失败: ' + (result.stderr || result.stdout || 'unknown') }
+        }
+        return { ok: true, url }
+      } catch (err) {
+        return { ok: false, error: errorText(err) }
+      }
+    })
   },
 }

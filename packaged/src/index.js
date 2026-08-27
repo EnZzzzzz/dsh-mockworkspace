@@ -17,6 +17,9 @@
  */
 
 import { readFile } from 'node:fs/promises'
+import { existsSync, openSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+import { dirname } from 'node:path'
 
 export function apply(ctx) {
   const errorText = (err) => (err && err.message ? String(err.message) : String(err))
@@ -27,6 +30,9 @@ export function apply(ctx) {
   const CONFIG_PATH = (typeof process !== 'undefined' && process.env && process.env.HOME)
     ? process.env.HOME.replace(/[/\\]+$/, '') + '/.dsh/mock-workspace.json'
     : null
+  // 产物托管 Hub（artifact-hub/server.mjs）管理页地址；改端口需与
+  // ARTIFACT_HUB_PORT 环境变量保持一致。
+  const HUB_URL = 'http://127.0.0.1:4780/'
 
   // ---- 路径工具 ----
   function workspaceRootFallback() {
@@ -328,6 +334,78 @@ export function apply(ctx) {
             const path = typeof args.path === 'string' ? args.path : ''
             if (!insideMockRoot(path)) return { ok: false, error: '路径不在 mock 工作区内' }
             return listDirectory(path)
+          }
+          case 'start-hub': {
+            // 从面板手动拉起产物托管 Hub（artifact-hub/server.mjs）。
+            // detached + unref：Hub 脱离 dsh 进程生命周期独立常驻；stdout/stderr
+            // 追加到 artifact-hub/hub.log 便于排查。process.execPath 在 Electron
+            // 壳下是壳二进制，ELECTRON_RUN_AS_NODE=1 让它以纯 Node 运行；PATH 补
+            // 常见 node/npm 目录（Hub 内部 spawn npm 装依赖依赖它）。
+            const root = workspaceRootFallback()
+            const serverPath = root + '/artifact-hub/server.mjs'
+            if (!existsSync(serverPath)) return { ok: false, error: '未找到 ' + serverPath }
+            const pingHub = async () => {
+              try {
+                const res = await fetch(HUB_URL + 'api/state', { cache: 'no-store' })
+                return res.ok
+              } catch (err) {
+                return false
+              }
+            }
+            if (await pingHub()) return { ok: true, already: true, url: HUB_URL }
+            // 面板页与 apiproxy 同源，客户端传 location.origin 作为 Hub 的
+            // DSH_API（端口随 dsh 启动变化，server.mjs 的默认值会过期）。
+            const dshApi = typeof args.dshApi === 'string' && /^https?:\/\/127\.0\.0\.1:\d+$/.test(args.dshApi)
+              ? args.dshApi : ''
+            const extraPaths = [dirname(process.execPath), '/usr/local/bin', '/opt/homebrew/bin']
+            const env = Object.assign({}, process.env, {
+              ELECTRON_RUN_AS_NODE: '1',
+              PATH: extraPaths.concat(String(process.env.PATH || '')).join(':'),
+            })
+            if (dshApi !== '') env.DSH_API = dshApi
+            let stdio = 'ignore'
+            try {
+              const fd = openSync(root + '/artifact-hub/hub.log', 'a')
+              stdio = ['ignore', fd, fd]
+            } catch (err) { /* 日志打不开就丢弃输出，不阻塞启动 */ }
+            const child = spawn(process.execPath, [serverPath], {
+              cwd: root,
+              detached: true,
+              stdio,
+              env,
+            })
+            child.on('error', () => {})
+            child.unref()
+            // 等就绪（最长 ~10s，Hub 首次扫描 runs/ 可能耗时）
+            const deadline = Date.now() + 10000
+            while (Date.now() < deadline) {
+              await new Promise((resolve) => setTimeout(resolve, 400))
+              if (await pingHub()) return { ok: true, url: HUB_URL, pid: child.pid, ready: true }
+            }
+            // 进程已拉起但还没应答：交给面板 15s 轮询发现，不算失败
+            return { ok: true, url: HUB_URL, pid: child.pid, ready: false }
+          }
+          case 'open-hub': {
+            // 打开产物托管页（artifact-hub）。走系统默认程序（macOS `open`），
+            // 在 Electron / 浏览器壳下行为都确定；Hub 未启动时用户会看到连接
+            // 错误页，面板侧的在线探测负责提示。args.select 为产物 id 时拼
+            // ?select=<id> 深链，Hub 管理页加载后自动选中该产物。
+            const shell = ctx.get('shell')
+            if (shell === undefined) return { ok: false, error: 'shell 服务不可用' }
+            const select = typeof args.select === 'string' && args.select !== '' ? args.select : ''
+            const url = HUB_URL.replace(/"/g, '') + (select ? '?select=' + encodeURIComponent(select) : '')
+            const request = { command: 'open "' + url + '"' }
+            let spec
+            try {
+              spec = shell.resolve(request)
+            } catch (err) {
+              spec = request
+            }
+            const result = await shell.run(spec)
+            if (result.exitCode !== 0) {
+              return { ok: false, error: '打开失败: ' + (result.stderr || result.stdout || 'unknown') }
+            }
+            return { ok: true, url }
           }
           default:
             return { ok: false, error: 'unknown mock endpoint: ' + String(endpoint) }

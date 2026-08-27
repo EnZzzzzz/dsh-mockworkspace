@@ -96,6 +96,43 @@ Mock 根目录**可配置**，持久化在 `~/.dsh/mock-workspace.json`（`{"roo
 - 批次保存在 `<根>/runs/<batchId>/`；切换根后旧批次保留在原目录，面板只显示
   新根下的批次。
 
+## 用例库（benchmark prompts）
+
+面板第二张卡片「用例库」：benchmark 测试用例（prompt）的导入与管理。
+**导入**按钮打开两步表单：① 数据集绝对路径（推荐大文件）或文件上传 →
+「解析」；② 确认字段映射（prompt 列必选，id/语言列可空，标签列勾选，其余
+列自动进 meta 不透明保留）+ 样例预览 → 「确认导入」。列表区按用例集 +
+标签筛选浏览（sourceRef + prompt 预览，点击展开全文），集可删除（二次确认）。
+
+语义层：CaseSet / Case / Importer，导入时归一化、meta 不透明保留；存储与
+API 由 artifact-hub 承载（`<mock 根>/case-library/`，详见
+`../artifact-hub/README.md` 用例库一节）。自定义 CSV（如
+`playground/tubiao_pg/queries.csv`）与公开 benchmark 都走同一个通用结构化
+导入器——支持新 benchmark = 一组字段映射。
+
+## 接口 Mock（接口级 Mock）
+
+面板第三张卡片「接口 Mock」：批次选择器 + 用例列表（开/关切换、METHOD 徽章、
+路径、悬停编辑/删除）+ 内联新建/编辑表单（方法、路径、状态码、延迟、期望
+响应体、自定义响应头）。数据由 artifact-hub 承载：存批次目录
+`mock-cases.json`，启用用例即被伺服为 `http://127.0.0.1:4780/m/<batchId>/<path>`
+可调用的 Mock 接口（面板直连 Hub CORS API，不走 Host RPC）。
+
+## 产物托管入口（artifact-hub）
+
+面板头部新增**地球图标按钮**：打开产物托管页（artifact-hub，默认
+`http://127.0.0.1:4780/`）。按钮右侧状态点实时反映 Hub 在线状态（15s 轮询
+`GET /api/state`，Hub API 带 CORS `*` 头）；点击优先走 Host `/mock` 通道的
+`open-hub` 端点（macOS `open` → 系统默认浏览器），失败退回 `window.open`。
+Hub 的启动与产物发现规则见 `../artifact-hub/README.md`。
+
+「产物托管」卡片在 Hub 离线时提供**「启动」按钮**：走 `/mock` 通道的
+`start-hub` 端点，Host 以 `process.execPath` + `ELECTRON_RUN_AS_NODE=1`
+detached 拉起 `artifact-hub/server.mjs`（独立于 dsh 常驻，日志追加到
+`artifact-hub/hub.log`），并把面板页的 `location.origin` 作为 `DSH_API`
+传入（apiproxy 端口随 dsh 启动变化，server.mjs 默认值会过期）；启动后
+Host 轮询 `GET /api/state` 最长 10s 等待就绪。
+
 ## 已知限制（MVP）
 
 - 批次下的会话数来自 `sessionQuery.listSessions()` 的 cwd 匹配，仅统计 live

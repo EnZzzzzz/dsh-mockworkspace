@@ -48,6 +48,16 @@ dsh-mockworkspace/                       ← Mock 根（当前会话工作区）
 | `mock.archive-batch` | `{ path }` | 批次置为 archived |
 | `mock.delete-batch` | `{ path, workspaceId }` | 删注册 + rm -rf 目录（仅限 mock 根内） |
 | `mock.list-directory` | `{ path }` | 列目录（产物树） |
+| `mock.open-hub` | – | 打开产物托管页（artifact-hub，macOS `open`） |
+| `mock.start-hub` | `{ dshApi }` | nohup 后台拉起 artifact-hub/server.mjs（日志 `artifact-hub/hub.log`），`DSH_API` 取面板 `location.origin`，curl 轮询就绪 |
+
+面板头部另有**地球图标按钮**：打开 artifact-hub 管理页，右侧状态点实时显示
+Hub 在线状态（轮询 `http://127.0.0.1:4780/api/state`）。
+
+面板另有「用例库」卡片：benchmark prompt 用例集导入（CSV/JSONL/JSON，两步
+字段映射表单）+ 标签筛选浏览，数据存 mock 根 `case-library/`；以及「接口
+Mock」卡片：接口级 Mock 用例 CRUD + 开关，数据存批次目录 `mock-cases.json`，
+由 artifact-hub 伺服为 `/m/<batchId>/<path>` 真实接口。
 
 安全边界：所有目录操作经 `insideMockRoot()` 校验，只允许 mock 根（含 `runs/`）内
 的路径；删除前二次确认。

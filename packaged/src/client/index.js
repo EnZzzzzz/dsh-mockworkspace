@@ -73,17 +73,32 @@ const ICONS = {
   folder: 'M2 4.5 A1.5 1.5 0 0 1 3.5 3 H5.8 L7.3 4.5 H12.5 A1.5 1.5 0 0 1 14 6 V11.5 A1.5 1.5 0 0 1 12.5 13 H3.5 A1.5 1.5 0 0 1 2 11.5 Z',
   archive: 'M3 4.5 H13 L12.5 12.5 A1 1 0 0 1 11.5 13.5 H4.5 A1 1 0 0 1 3.5 12.5 Z M4.5 7.5 H11.5',
   trash: 'M3 4.5 H13 M6 4.5 V3.5 A1 1 0 0 1 7 2.5 H9 A1 1 0 0 1 10 3.5 V4.5 M4.5 4.5 L5.2 12.5 A1 1 0 0 0 6.2 13.5 H9.8 A1 1 0 0 0 10.8 12.5 L11.5 4.5',
+  globe: 'M8 2 A6 6 0 1 0 8 14 A6 6 0 1 0 8 2 Z M2 8 H14 M8 2 C9.8 3.8 10.5 5.8 10.5 8 C10.5 10.2 9.8 12.2 8 14 C6.2 12.2 5.5 10.2 5.5 8 C5.5 5.8 6.2 3.8 8 2 Z',
+  list: 'M2.5 4 H13.5 M2.5 8 H13.5 M2.5 12 H13.5',
+  pencil: 'M2 14 L2.9 10.6 L10.6 2.9 A1.4 1.4 0 0 1 12.6 4.9 L4.9 12.6 Z M9.6 3.9 L11.6 5.9',
+  book: 'M4 2.5 H12.5 A1 1 0 0 1 13.5 3.5 V12.5 A1 1 0 0 1 12.5 13.5 H4 A1.5 1.5 0 0 1 2.5 12 V4 A1.5 1.5 0 0 1 4 2.5 Z M2.5 11 A1.5 1.5 0 0 1 4 9.5 H13.5',
+  upload: 'M8 10.5 V2.5 M5 5.5 L8 2.5 L11 5.5 M3 12.5 H13',
 }
 
+// 产物托管 Hub（artifact-hub/server.mjs）管理页地址；改端口需与
+// Hub 的 ARTIFACT_HUB_PORT 环境变量一致。Hub 的 /api/* 带 CORS * 头，
+// 面板可直接 fetch 探测在线状态。
+const HUB_URL = 'http://127.0.0.1:4780/'
+
 const CSS = `
-.dshmw-root{flex:1;min-height:0;display:flex;flex-direction:column;box-sizing:border-box;padding:2px 4px 6px 0}
-.dshmw-header{flex:none;display:flex;align-items:center;justify-content:space-between;gap:4px;height:32px;padding-left:8px;box-sizing:border-box;color:var(--dsw-alias-label-secondary)}
+.dshmw-root{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;box-sizing:border-box;padding:4px 8px 8px;overflow-y:auto;overflow-x:hidden}
+.dshmw-header{flex:none;display:flex;align-items:center;justify-content:space-between;gap:4px;height:28px;padding:0 2px 0 6px;box-sizing:border-box;color:var(--dsw-alias-label-secondary)}
 .dshmw-title{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:13px;font-weight:600}
-.dshmw-headbtn{flex:none;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:none;border-radius:50%;padding:0;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary)}
+.dshmw-headbtn{flex:none;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:none;border-radius:6px;padding:0;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary)}
 .dshmw-headbtn:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
-.dshmw-new{flex:none;display:inline-flex;align-items:center;justify-content:center;gap:4px;height:26px;border:none;border-radius:8px;padding:0 8px;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:12px}
-.dshmw-new:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
-.dshmw-form{border:1px solid var(--dsw-alias-border-l1);border-radius:8px;margin:0 8px 6px;padding:8px;display:flex;flex-direction:column;gap:6px;box-sizing:border-box}
+.dshmw-card{flex:none;border:1px solid var(--dsw-alias-border-l1);border-radius:10px}
+.dshmw-cardhead{display:flex;align-items:center;gap:6px;padding:6px 8px 6px 10px;border-bottom:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-secondary)}
+.dshmw-cardicon{flex:none;display:inline-flex}
+.dshmw-cardtitle{flex:1;min-width:0;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.dshmw-cardbtn{flex:none;display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:11px;font-family:inherit}
+.dshmw-cardbtn:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
+.dshmw-cardbody{padding:4px}
+.dshmw-form{border:1px solid var(--dsw-alias-border-l1);border-radius:8px;margin:2px 4px 4px;padding:8px;display:flex;flex-direction:column;gap:6px;box-sizing:border-box}
 .dshmw-input{width:100%;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:12px;padding:5px 8px;font-family:inherit}
 .dshmw-input:focus{outline:none;border-color:var(--dsw-alias-border-l2)}
 .dshmw-formrow{display:flex;gap:6px}
@@ -92,15 +107,14 @@ const CSS = `
 .dshmw-submit:hover{background:var(--dsw-alias-bg-layer-2)}
 .dshmw-submit:disabled{opacity:.5;cursor:default}
 .dshmw-error{flex:none;font-size:11px;color:var(--dsw-alias-state-error-primary);overflow-wrap:break-word}
-.dshmw-list{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden}
 .dshmw-batchrow{position:relative;display:flex;align-items:center}
 .dshmw-batchrow .dshmw-batch{flex:1;min-width:0}
-.dshmw-batchacts{position:absolute;right:6px;display:none;align-items:center;gap:2px}
+.dshmw-batchacts{position:absolute;right:4px;display:none;align-items:center;gap:2px}
 .dshmw-batchrow:hover .dshmw-batchacts{display:inline-flex}
 .dshmw-batchact{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border:none;border-radius:5px;padding:0;background:var(--dsw-alias-bg-layer-1);cursor:pointer;color:var(--dsw-alias-label-secondary)}
 .dshmw-batchact:hover{color:var(--dsw-alias-label-primary)}
 .dshmw-batchact-danger{color:var(--dsw-alias-state-error-primary)}
-.dshmw-batch{width:100%;display:flex;align-items:center;gap:6px;min-height:30px;margin-top:4px;padding:0 8px;box-sizing:border-box;border:none;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:13px;text-align:left;border-radius:8px}
+.dshmw-batch{width:100%;display:flex;align-items:center;gap:6px;min-height:30px;padding:0 6px;box-sizing:border-box;border:none;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:13px;text-align:left;border-radius:7px}
 .dshmw-batch:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
 .dshmw-batchicon{flex:none;align-self:flex-start;margin-top:2px;color:var(--dsw-alias-label-secondary)}
 .dshmw-batchmain{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
@@ -113,11 +127,11 @@ const CSS = `
 .dshmw-sessplus{flex:none;width:8px;height:8px;display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-secondary)}
 .dshmw-sessrow{position:relative;display:flex;align-items:center}
 .dshmw-sessrow .dshmw-sess{flex:1;min-width:0}
-.dshmw-sessact{position:absolute;right:6px;display:none;align-items:center;justify-content:center;width:20px;height:20px;border:none;border-radius:5px;padding:0;background:var(--dsw-alias-bg-layer-1);cursor:pointer;color:var(--dsw-alias-label-secondary)}
+.dshmw-sessact{position:absolute;right:4px;display:none;align-items:center;justify-content:center;width:20px;height:20px;border:none;border-radius:5px;padding:0;background:var(--dsw-alias-bg-layer-1);cursor:pointer;color:var(--dsw-alias-label-secondary)}
 .dshmw-sessact:hover{color:var(--dsw-alias-label-primary)}
 .dshmw-sessrow:hover .dshmw-sessact{display:inline-flex}
 .dshmw-sessrow:hover .dshmw-sessmeta{visibility:hidden}
-.dshmw-sess{display:flex;align-items:center;gap:6px;width:100%;height:28px;border:none;border-radius:6px;padding:0 8px;box-sizing:border-box;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:12px;text-align:left}
+.dshmw-sess{display:flex;align-items:center;gap:6px;width:100%;height:28px;border:none;border-radius:6px;padding:0 6px;box-sizing:border-box;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:12px;text-align:left}
 .dshmw-sess:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
 .dshmw-sessdot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-state-success-primary)}
 .dshmw-sessname{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
@@ -126,9 +140,57 @@ const CSS = `
 .dshmw-err{flex:1;min-width:0;color:var(--dsw-alias-state-error-primary);overflow-wrap:break-word}
 .dshmw-retry{flex:none;border:none;border-radius:6px;padding:2px 8px;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:12px}
 .dshmw-retry:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
-.dshmw-empty{padding:16px 12px;color:var(--dsw-alias-label-secondary);font-size:13px}
+.dshmw-empty{padding:12px 10px;color:var(--dsw-alias-label-secondary);font-size:13px}
 .dshmw-hint{margin-top:4px;font-size:12px;opacity:.75}
-.dshmw-rootpath{flex:none;padding:0 8px 4px;font-size:11px;opacity:.6;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--dsw-alias-label-secondary)}
+.dshmw-rootpath{flex:none;padding:0 6px;font-size:11px;opacity:.55;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--dsw-alias-label-secondary)}
+.dshmw-hubrow{display:flex;align-items:center;gap:7px;padding:5px 6px;font-size:12px;color:var(--dsw-alias-label-secondary)}
+.dshmw-huburl{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.dshmw-hubdot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--dsw-alias-label-tertiary,#8a919d)}
+.dshmw-hubdot.online{background:var(--dsw-alias-state-success-primary);box-shadow:0 0 4px rgba(63,185,105,.7)}
+.dshmw-artgrouplabel{padding:3px 6px 1px;font-size:11px;color:var(--dsw-alias-label-secondary);opacity:.7;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.dshmw-art{display:flex;align-items:center;gap:7px;width:100%;min-height:26px;padding:0 6px;box-sizing:border-box;border:none;border-radius:6px;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:12px;text-align:left}
+.dshmw-art:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
+.dshmw-artname{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.dshmw-kind{flex:none;border-radius:4px;padding:0 5px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.dshmw-dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-label-tertiary,#9aa0a6)}
+.dshmw-dot.running{background:var(--dsw-alias-state-success-primary)}
+.dshmw-dot.starting,.dshmw-dot.installing{background:#d9a13b;animation:dshmw-pulse 1.1s infinite}
+.dshmw-dot.failed{background:var(--dsw-alias-state-error-primary)}
+@keyframes dshmw-pulse{50%{opacity:.35}}
+.dshmw-select{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:11px;padding:2px 4px;font-family:inherit;max-width:100%}
+.dshmw-caserow{position:relative;display:flex;align-items:center;gap:7px;min-height:28px;padding:0 6px;border-radius:6px}
+.dshmw-caserow:hover{background:var(--dsw-alias-bg-layer-1)}
+.dshmw-caseacts{position:absolute;right:4px;display:none;align-items:center;gap:2px}
+.dshmw-caserow:hover .dshmw-caseacts{display:inline-flex}
+.dshmw-caserow:hover .dshmw-casename{visibility:hidden}
+.dshmw-casename{flex:none;max-width:34%;font-size:11px;color:var(--dsw-alias-label-secondary);opacity:.8;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.dshmw-casepath{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--dsw-alias-label-primary)}
+.dshmw-casepath.off{opacity:.45;text-decoration:line-through}
+.dshmw-method{flex:none;border-radius:4px;padding:0 5px;font-size:10px;line-height:15px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600}
+.dshmw-method.m-get{color:#3fb969;background:rgba(63,185,105,.12)}
+.dshmw-method.m-post{color:#4f8ef7;background:rgba(79,142,247,.12)}
+.dshmw-method.m-put{color:#d9a13b;background:rgba(217,161,59,.12)}
+.dshmw-method.m-delete{color:#e05d5d;background:rgba(224,93,93,.12)}
+.dshmw-method.m-patch{color:#b47ee0;background:rgba(180,126,224,.12)}
+.dshmw-librow{display:flex;flex-direction:column;gap:3px;padding:5px 6px;border-radius:6px;cursor:default}
+.dshmw-librow:hover{background:var(--dsw-alias-bg-layer-1)}
+.dshmw-libhead{display:flex;align-items:center;gap:6px;font-size:11px}
+.dshmw-libref{flex:none;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;color:var(--dsw-alias-label-secondary);opacity:.85;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:45%}
+.dshmw-liblang{flex:none;font-size:10px;color:var(--dsw-alias-label-secondary);opacity:.7}
+.dshmw-libprompt{font-size:12px;color:var(--dsw-alias-label-primary);line-height:1.45;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:break-word;white-space:pre-wrap}
+.dshmw-libprompt.open{display:block;-webkit-line-clamp:unset}
+.dshmw-tags{display:flex;flex-wrap:wrap;gap:4px}
+.dshmw-tag{flex:none;font-size:10px;padding:1px 6px;border-radius:999px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);white-space:nowrap}
+.dshmw-checkgrid{display:flex;flex-wrap:wrap;gap:4px 10px;max-height:96px;overflow-y:auto}
+.dshmw-check{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--dsw-alias-label-secondary);cursor:pointer}
+.dshmw-sample{border:1px solid var(--dsw-alias-border-l1);border-radius:6px;padding:6px 8px;font-size:11px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-bg-layer-1);max-height:110px;overflow-y:auto;white-space:pre-wrap;overflow-wrap:break-word}
+.dshmw-switch{position:relative;flex:none;width:26px;height:15px;border-radius:999px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);cursor:pointer;padding:0}
+.dshmw-switch::after{content:'';position:absolute;top:1px;left:2px;width:9px;height:9px;border-radius:50%;background:var(--dsw-alias-label-tertiary,#9aa0a6);transition:left .15s}
+.dshmw-switch.on{background:rgba(63,185,105,.22);border-color:rgba(63,185,105,.5)}
+.dshmw-switch.on::after{left:12px;background:var(--dsw-alias-state-success-primary)}
+.dshmw-textarea{width:100%;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:11px;padding:5px 8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical;min-height:56px}
+.dshmw-textarea:focus{outline:none;border-color:var(--dsw-alias-border-l2)}
+.dshmw-fieldlabel{font-size:10px;color:var(--dsw-alias-label-secondary);opacity:.8}
 .dshmw-setrow{border-bottom:1px solid var(--dsw-alias-border-l2);padding:16px 0;display:flex;flex-direction:column;gap:8px}
 .dshmw-setrow-head{display:flex;align-items:center;gap:8px}
 .dshmw-setrow-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;padding-right:12px}
@@ -196,6 +258,54 @@ function apiCall(method, payload) {
     return full.result.value
   })
 }
+
+// ---- artifact-hub 直连 API（Hub 带 CORS * 头，面板直接读写用例） ----
+function hubApi(pathname, opts) {
+  return fetch(HUB_URL + 'api/' + pathname, opts).then((res) => {
+    if (!res.ok) throw new Error('hub transport: HTTP ' + res.status)
+    return res.json()
+  }).then((msg) => {
+    if (!msg || msg.ok !== true) throw new Error(msg && msg.error ? msg.error : 'Hub 请求失败')
+    return msg.value
+  })
+}
+const listCases = (batchId) => hubApi('cases?batchId=' + encodeURIComponent(batchId))
+const createCase = (batchId, fields) => hubApi('cases/create', {
+  method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ batchId, case: fields }),
+})
+const updateCase = (batchId, id, patch) => hubApi('cases/update', {
+  method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ batchId, id, patch }),
+})
+const deleteCase = (batchId, id) => hubApi('cases/delete', {
+  method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ batchId, id }),
+})
+
+// ---- 用例库（benchmark prompts）直连 API；语义层：CaseSet / Case / Importer ----
+// Case 规范形态（导入时归一化）：{ id, setId, sourceRef, prompt, language,
+// tags[], meta{} }。prompt 唯一必填；meta 是不透明袋子（原始行其余列原样保留）。
+const listLibSets = () => hubApi('library/sets')
+const previewLib = (payload) => hubApi('library/preview', {
+  method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify(payload),
+})
+const importLib = (payload) => hubApi('library/import', {
+  method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify(payload),
+})
+const listLibCases = (setId, opts) => {
+  const o = opts || {}
+  const qs = 'setId=' + encodeURIComponent(setId)
+    + '&offset=' + (o.offset || 0) + '&limit=' + (o.limit || 50)
+    + (o.tag ? '&tag=' + encodeURIComponent(o.tag) : '')
+  return hubApi('library/cases?' + qs)
+}
+const deleteLibSet = (setId) => hubApi('library/delete-set', {
+  method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ setId }),
+})
 
 // ---- mock 会话集合：conversation.composer 接管选择器的认领依据 ----
 // 只认本插件创建（或历史批次 cwd 关联）的会话；其他会话（包括其他
@@ -448,6 +558,284 @@ function MockRootSettingsRow() {
     error ? React.createElement('div', { className: 'dshmw-seterror', role: 'alert' }, error) : null)
 }
 
+// ---- 用例行（开关 + METHOD 徽章 + 路径 + 名称 + 悬停编辑/删除） ----
+function CaseRow(props) {
+  const c = props.c
+  const [confirmDelete, setConfirmDelete] = React.useState(false)
+  return React.createElement('div', { className: 'dshmw-caserow' },
+    React.createElement('button', {
+      type: 'button',
+      className: 'dshmw-switch' + (c.enabled ? ' on' : ''),
+      role: 'switch',
+      'aria-checked': c.enabled === true,
+      title: c.enabled ? '停用该用例' : '启用该用例',
+      onClick: () => props.onToggle(c),
+    }),
+    React.createElement('span', { className: 'dshmw-method m-' + String(c.method || '').toLowerCase() }, c.method),
+    React.createElement('span', { className: 'dshmw-casepath' + (c.enabled ? '' : ' off'), title: c.path }, c.path),
+    React.createElement('span', { className: 'dshmw-casename', title: c.name }, c.name),
+    React.createElement('div', { className: 'dshmw-caseacts' },
+      React.createElement('button', {
+        type: 'button',
+        className: 'dshmw-sessact',
+        title: '编辑用例',
+        onClick: () => props.onEdit(c),
+      }, React.createElement(SvgIcon, { d: ICONS.pencil, size: 12 })),
+      React.createElement('button', {
+        type: 'button',
+        className: confirmDelete ? 'dshmw-sessact dshmw-batchact-danger' : 'dshmw-sessact',
+        title: confirmDelete ? '再次点击确认删除' : '删除用例',
+        onClick: () => {
+          if (!confirmDelete) { setConfirmDelete(true); return }
+          props.onDelete(c)
+          setConfirmDelete(false)
+        },
+      }, React.createElement(SvgIcon, { d: ICONS.trash, size: 12 }))))
+}
+
+// ---- 用例表单（新建 / 编辑共用） ----
+function CaseForm(props) {
+  const init = props.initial || {}
+  const [name, setName] = React.useState(init.name || '')
+  const [method, setMethod] = React.useState(init.method || 'GET')
+  const [pathVal, setPathVal] = React.useState(init.path || '/api/')
+  const [status, setStatus] = React.useState(String(init.status !== undefined ? init.status : 200))
+  const [delayMs, setDelayMs] = React.useState(String(init.delayMs || 0))
+  const [body, setBody] = React.useState(init.body || '{\n  \n}')
+  const [headersText, setHeadersText] = React.useState(
+    init.headers && Object.keys(init.headers).length > 0 ? JSON.stringify(init.headers) : '')
+  const [busy, setBusy] = React.useState(false)
+  const [error, setError] = React.useState(null)
+
+  const submit = () => {
+    if (busy) return
+    let headers = {}
+    if (headersText.trim() !== '') {
+      try { headers = JSON.parse(headersText) } catch (e) { setError('响应头不是合法 JSON'); return }
+      if (!headers || typeof headers !== 'object' || Array.isArray(headers)) { setError('响应头须为 JSON 对象'); return }
+    }
+    setBusy(true)
+    setError(null)
+    props.onSubmit({
+      name, method, path: pathVal,
+      status: Number(status), delayMs: Number(delayMs),
+      body, headers,
+    }, () => { setBusy(false) }, (err) => { setBusy(false); setError(errorText(err)) })
+  }
+
+  return React.createElement('div', { className: 'dshmw-form' },
+    React.createElement('div', { className: 'dshmw-formrow' },
+      React.createElement('select', {
+        className: 'dshmw-select', value: method,
+        onChange: (e) => setMethod(e.target.value),
+      }, ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS'].map((m) =>
+        React.createElement('option', { key: m, value: m }, m))),
+      React.createElement('input', {
+        className: 'dshmw-input',
+        placeholder: '接口路径，如 /api/login（支持 /* 尾通配）',
+        value: pathVal,
+        onChange: (e) => setPathVal(e.target.value),
+      })),
+    React.createElement('input', {
+      className: 'dshmw-input',
+      placeholder: '用例名称（可空，默认取路径）',
+      value: name,
+      onChange: (e) => setName(e.target.value),
+    }),
+    React.createElement('div', { className: 'dshmw-formrow' },
+      React.createElement('span', { className: 'dshmw-fieldlabel' }, '状态码'),
+      React.createElement('input', {
+        className: 'dshmw-input', style: { width: 64, flex: 'none' },
+        value: status, onChange: (e) => setStatus(e.target.value),
+      }),
+      React.createElement('span', { className: 'dshmw-fieldlabel' }, '延迟 ms'),
+      React.createElement('input', {
+        className: 'dshmw-input', style: { width: 64, flex: 'none' },
+        value: delayMs, onChange: (e) => setDelayMs(e.target.value),
+      })),
+    React.createElement('textarea', {
+      className: 'dshmw-textarea',
+      placeholder: '期望响应体（原样返回）',
+      value: body,
+      rows: 4,
+      onChange: (e) => setBody(e.target.value),
+    }),
+    React.createElement('input', {
+      className: 'dshmw-input',
+      placeholder: '自定义响应头 JSON（可空），如 {"x-mock":"1"}',
+      value: headersText,
+      onChange: (e) => setHeadersText(e.target.value),
+    }),
+    React.createElement('div', { className: 'dshmw-formrow' },
+      React.createElement('button', {
+        type: 'button', className: 'dshmw-submit', disabled: busy, onClick: submit,
+      }, busy ? '保存中…' : '保存'),
+      React.createElement('button', {
+        type: 'button', className: 'dshmw-retry', onClick: props.onCancel,
+      }, '取消')),
+    error ? React.createElement('div', { className: 'dshmw-error', role: 'alert' }, error) : null)
+}
+
+// ---- 用例库：用例行（sourceRef + prompt 预览 + 标签；点击展开全文） ----
+function LibCaseRow(props) {
+  const c = props.c
+  const [open, setOpen] = React.useState(false)
+  return React.createElement('div', { className: 'dshmw-librow' },
+    React.createElement('div', { className: 'dshmw-libhead' },
+      React.createElement('span', { className: 'dshmw-libref', title: c.sourceRef }, c.sourceRef),
+      c.language ? React.createElement('span', { className: 'dshmw-liblang' }, c.language) : null),
+    React.createElement('div', {
+      className: 'dshmw-libprompt' + (open ? ' open' : ''),
+      title: open ? '' : '点击展开完整 prompt',
+      onClick: () => setOpen(!open),
+    }, c.prompt),
+    (c.tags && c.tags.length > 0)
+      ? React.createElement('div', { className: 'dshmw-tags' },
+          c.tags.slice(0, 4).map((t) => React.createElement('span', { key: t, className: 'dshmw-tag' }, t)))
+      : null)
+}
+
+// ---- 用例库：导入表单（两步：解析 → 字段映射 + 样例预览 → 确认导入） ----
+// 通用结构化导入器：CSV/JSONL/JSON 通吃；具名 benchmark 预设 = 预填映射。
+function LibraryImportForm(props) {
+  const [name, setName] = React.useState('')
+  const [pathVal, setPathVal] = React.useState('')
+  const [fileObj, setFileObj] = React.useState(null) // { name, content }
+  const [busy, setBusy] = React.useState(false)
+  const [error, setError] = React.useState(null)
+  // 解析结果：{ kind, fileName, columns, totalRows, sampleRows }
+  const [parsed, setParsed] = React.useState(null)
+  // 字段映射
+  const [promptCol, setPromptCol] = React.useState('')
+  const [refCol, setRefCol] = React.useState('')
+  const [langCol, setLangCol] = React.useState('')
+  const [tagCols, setTagCols] = React.useState([])
+
+  const doParse = () => {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    const payload = fileObj !== null
+      ? { content: fileObj.content, fileName: fileObj.name }
+      : { path: pathVal.trim() }
+    previewLib(payload).then((v) => {
+      setParsed(v)
+      const g = v.guessed || {}
+      setPromptCol(g.promptColumn || '')
+      setRefCol(g.refColumn || '')
+      setLangCol(g.languageColumn || '')
+      setTagCols(Array.isArray(g.tagColumns) ? g.tagColumns : [])
+      if (name === '') setName(String(v.fileName || '').replace(/\.[^.]+$/, ''))
+    }).catch((err) => setError(errorText(err)))
+      .finally(() => setBusy(false))
+  }
+
+  const doImport = () => {
+    if (busy) return
+    if (promptCol === '') { setError('请选择 prompt 列'); return }
+    setBusy(true)
+    setError(null)
+    const base = fileObj !== null
+      ? { content: fileObj.content, fileName: fileObj.name }
+      : { path: pathVal.trim() }
+    importLib(Object.assign(base, {
+      name: name.trim(),
+      mapping: { promptColumn: promptCol, refColumn: refCol, languageColumn: langCol, tagColumns: tagCols },
+    })).then((v) => {
+      props.onImported(v)
+    }).catch((err) => { setBusy(false); setError(errorText(err)) })
+  }
+
+  const colSelect = (value, setter, placeholder) =>
+    React.createElement('select', {
+      className: 'dshmw-select', style: { flex: 1 }, value,
+      onChange: (e) => setter(e.target.value),
+    }, [React.createElement('option', { key: '', value: '' }, placeholder)].concat(
+      (parsed ? parsed.columns : []).map((c) => React.createElement('option', { key: c, value: c }, c))))
+
+  return React.createElement('div', { className: 'dshmw-form' },
+    React.createElement('input', {
+      className: 'dshmw-input',
+      placeholder: '数据集绝对路径（推荐，大文件），如 /…/queries.csv',
+      value: pathVal,
+      disabled: fileObj !== null,
+      onChange: (e) => setPathVal(e.target.value),
+    }),
+    React.createElement('div', { className: 'dshmw-formrow' },
+      React.createElement('input', {
+        key: fileObj ? fileObj.name : 'nofile',
+        type: 'file', accept: '.csv,.jsonl,.ndjson,.json,text/csv,application/json',
+        style: { flex: 1, fontSize: 11, color: 'var(--dsw-alias-label-secondary)' },
+        onChange: (e) => {
+          const f = e.target.files && e.target.files[0]
+          if (!f) { setFileObj(null); return }
+          if (f.size > 64 * 1024 * 1024) { setError('文件超过 64MB，请改用绝对路径导入'); return }
+          const reader = new FileReader()
+          reader.onload = () => { setFileObj({ name: f.name, content: String(reader.result || '') }); setError(null) }
+          reader.onerror = () => setError('读取文件失败')
+          reader.readAsText(f)
+        },
+      })),
+    fileObj ? React.createElement('div', { className: 'dshmw-hint', style: { marginTop: 0 } },
+      '已选文件：' + fileObj.name + '（' + Math.round(fileObj.content.length / 1024) + ' KB）') : null,
+    parsed === null
+      ? React.createElement('div', { className: 'dshmw-formrow' },
+          React.createElement('button', {
+            type: 'button', className: 'dshmw-submit',
+            disabled: busy || (fileObj === null && pathVal.trim() === ''),
+            onClick: doParse,
+          }, busy ? '解析中…' : '解析'),
+          React.createElement('button', {
+            type: 'button', className: 'dshmw-retry', onClick: props.onCancel,
+          }, '取消'))
+      : [
+          React.createElement('div', { key: 'info', className: 'dshmw-hint', style: { marginTop: 0 } },
+            parsed.fileName + ' · ' + parsed.kind.toUpperCase() + ' · ' + parsed.totalRows + ' 行 · ' + parsed.columns.length + ' 列'),
+          React.createElement('input', {
+            key: 'name', className: 'dshmw-input',
+            placeholder: '用例集名称',
+            value: name, onChange: (e) => setName(e.target.value),
+          }),
+          React.createElement('div', { key: 'map1', className: 'dshmw-formrow' },
+            React.createElement('span', { className: 'dshmw-fieldlabel', style: { width: 52, flex: 'none', paddingTop: 5 } }, 'prompt'),
+            colSelect(promptCol, setPromptCol, '（必选）prompt 列')),
+          React.createElement('div', { key: 'map2', className: 'dshmw-formrow' },
+            React.createElement('span', { className: 'dshmw-fieldlabel', style: { width: 52, flex: 'none', paddingTop: 5 } }, 'id 列'),
+            colSelect(refCol, setRefCol, '（可空）sourceRef 列'),
+            React.createElement('span', { className: 'dshmw-fieldlabel', style: { flex: 'none', paddingTop: 5 } }, '语言'),
+            colSelect(langCol, setLangCol, '（可空）')),
+          React.createElement('div', { key: 'taglabel', className: 'dshmw-fieldlabel' },
+            '标签列（选中值进入 tags，用于筛选；其余列自动进 meta）'),
+          React.createElement('div', { key: 'tags', className: 'dshmw-checkgrid' },
+            parsed.columns.map((c) => React.createElement('label', { key: c, className: 'dshmw-check' },
+              React.createElement('input', {
+                type: 'checkbox',
+                checked: tagCols.includes(c),
+                onChange: (e) => {
+                  setTagCols(e.target.checked ? tagCols.concat([c]) : tagCols.filter((t) => t !== c))
+                },
+              }),
+              c))),
+          parsed.sampleRows && parsed.sampleRows.length > 0 && promptCol !== ''
+            ? React.createElement('div', { key: 'sample', className: 'dshmw-sample' },
+                '样例 prompt：' + String(parsed.sampleRows[0][promptCol] || ''))
+            : null,
+          React.createElement('div', { key: 'acts', className: 'dshmw-formrow' },
+            React.createElement('button', {
+              type: 'button', className: 'dshmw-submit', disabled: busy || promptCol === '',
+              onClick: doImport,
+            }, busy ? '导入中…' : '确认导入'),
+            React.createElement('button', {
+              type: 'button', className: 'dshmw-retry', disabled: busy,
+              onClick: () => setParsed(null),
+            }, '重选文件'),
+            React.createElement('button', {
+              type: 'button', className: 'dshmw-retry', onClick: props.onCancel,
+            }, '取消')),
+        ],
+    error ? React.createElement('div', { className: 'dshmw-error', role: 'alert' }, error) : null)
+}
+
 // ---- 批次行（固定展开：会话列表 + 末尾「新会话」入口） ----
 function BatchRow(props) {
   const batch = props.batch
@@ -568,6 +956,76 @@ function MockPanel(props) {
   const [batches, setBatches] = React.useState(null)
   const [error, setError] = React.useState(null)
   const [reloadKey, setReloadKey] = React.useState(0)
+  // 产物托管 Hub 状态：null（未知）| { online:false } | { online:true, batches:[…] }
+  const [hub, setHub] = React.useState(null)
+
+  // 探测产物托管 Hub（15s 轮询；Hub API 带 CORS * 头，顺带取产物清单做总览）。
+  const hubMounted = React.useRef(true)
+  React.useEffect(() => {
+    hubMounted.current = true
+    return () => { hubMounted.current = false }
+  }, [])
+  const pingHub = React.useCallback(() => {
+    fetch(HUB_URL + 'api/state', { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('HTTP ' + res.status))))
+      .then((msg) => {
+        if (!hubMounted.current) return
+        const value = msg && msg.ok === true && msg.value ? msg.value : {}
+        setHub({ online: true, batches: Array.isArray(value.batches) ? value.batches : [] })
+      })
+      .catch(() => { if (hubMounted.current) setHub({ online: false, batches: [] }) })
+  }, [])
+  React.useEffect(() => {
+    pingHub()
+    const timer = setInterval(pingHub, 15000)
+    return () => clearInterval(timer)
+  }, [pingHub])
+
+  // 手动启动 Hub：走 Host start-hub（detached spawn，进程独立于 dsh 常驻）。
+  // starting 期间按钮置灰；Host 已等待就绪，这里回来后再补两次探测覆盖慢启动。
+  const [hubStarting, setHubStarting] = React.useState(false)
+  const [hubStartError, setHubStartError] = React.useState(null)
+  const startHub = React.useCallback(() => {
+    if (hubStarting) return
+    setHubStarting(true)
+    setHubStartError(null)
+    // 面板与 apiproxy 同源，把 location.origin 传给 Host 作为 Hub 的 DSH_API。
+    rpcCall('start-hub', { dshApi: location.origin })
+      .then(() => { pingHub(); setTimeout(pingHub, 2000) })
+      .catch((err) => setHubStartError(err && err.message ? String(err.message) : String(err)))
+      .finally(() => setHubStarting(false))
+  }, [hubStarting, pingHub])
+
+  const openHub = React.useCallback((selectId) => {
+    const url = selectId ? HUB_URL + '?select=' + encodeURIComponent(selectId) : HUB_URL
+    // 打开顺序：① 内置浏览器（dsh-builtin-browser 发布在 window.__dshBrowser
+    // 的页面控制器；已有 Hub 页签则激活并刷新到目标深链，否则新建页签）
+    // ② Host `open`（系统默认浏览器） ③ window.open。
+    const fallback = () => {
+      rpcCall('open-hub', selectId ? { select: selectId } : {}).catch(() => {
+        try { window.open(url, '_blank', 'noopener') } catch (err) { console.warn(err) }
+      })
+    }
+    const ctrl = typeof window !== 'undefined' ? window.__dshBrowser : undefined
+    if (!ctrl || typeof ctrl.command !== 'function') { fallback(); return }
+    const navigate = () => ctrl.command({ op: 'navigate', url })
+    ctrl.command({ op: 'tab-list' }).then((res) => {
+      const tabs = res && Array.isArray(res.tabs) ? res.tabs : []
+      const existing = tabs.find((t) => typeof t.url === 'string' && t.url.startsWith(HUB_URL))
+      if (existing) {
+        return ctrl.command({ op: 'tab-activate', id: existing.id }).then(navigate)
+      }
+      return ctrl.command({ op: 'tab-new' }).then(navigate)
+    }).then((res) => {
+      if (res && res.ok === false) throw new Error(res.error || 'navigate failed')
+    }).catch(fallback)
+  }, [])
+
+  // ---- 用例管理状态（数据在 artifact-hub，存批次目录 mock-cases.json） ----
+  const [casesBatch, setCasesBatch] = React.useState('')
+  const [cases, setCases] = React.useState(null) // null 加载中 | []
+  const [casesReloadKey, setCasesReloadKey] = React.useState(0)
+  const [caseEditing, setCaseEditing] = React.useState(null) // null | 'new' | caseId
 
   const load = React.useCallback(() => {
     setError(null)
@@ -585,6 +1043,67 @@ function MockPanel(props) {
 
   React.useEffect(() => { load() }, [load, reloadKey])
 
+  // 用例卡片的批次选择：默认第一个未归档批次。
+  const activeBatches = (batches || []).filter((b) => !(b.meta && b.meta.status === 'archived'))
+  React.useEffect(() => {
+    if (casesBatch === '' && activeBatches.length > 0) setCasesBatch(activeBatches[0].batchId)
+    if (casesBatch !== '' && activeBatches.length > 0 && !activeBatches.some((b) => b.batchId === casesBatch)) {
+      setCasesBatch(activeBatches[0].batchId)
+    }
+  }, [batches]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 用例列表：Hub 在线且选定批次时加载。
+  const hubOnlineForCases = hub !== null && hub.online === true
+  React.useEffect(() => {
+    if (!hubOnlineForCases || casesBatch === '') { setCases(hubOnlineForCases ? null : null); return }
+    let disposed = false
+    setCases(null)
+    listCases(casesBatch)
+      .then((v) => { if (!disposed) setCases(v.cases || []) })
+      .catch(() => { if (!disposed) setCases([]) })
+    return () => { disposed = true }
+  }, [hubOnlineForCases, casesBatch, casesReloadKey])
+
+  const reloadCases = React.useCallback(() => { setCasesReloadKey((k) => k + 1) }, [])
+
+  // ---- 用例库状态（benchmark prompts，全局库，存 mock 根 case-library/） ----
+  const [libSets, setLibSets] = React.useState(null) // null 加载中 | []
+  const [libSetId, setLibSetId] = React.useState('')
+  const [libTag, setLibTag] = React.useState('')
+  const [libData, setLibData] = React.useState(null) // null 加载中 | { total, cases }
+  const [libImporting, setLibImporting] = React.useState(false)
+  const [libReloadKey, setLibReloadKey] = React.useState(0)
+  const [libConfirmDelete, setLibConfirmDelete] = React.useState(false)
+
+  const hubOnlineForLib = hub !== null && hub.online === true
+  // 用例集列表：Hub 在线时加载。
+  React.useEffect(() => {
+    if (!hubOnlineForLib) { setLibSets(null); return }
+    let disposed = false
+    listLibSets()
+      .then((v) => { if (!disposed) setLibSets(v.sets || []) })
+      .catch(() => { if (!disposed) setLibSets([]) })
+    return () => { disposed = true }
+  }, [hubOnlineForLib, libReloadKey])
+
+  // 默认选中第一个集；当前集被删后回退。
+  React.useEffect(() => {
+    if (!Array.isArray(libSets)) return
+    if (libSets.length === 0) { if (libSetId !== '') setLibSetId(''); return }
+    if (libSetId === '' || !libSets.some((s) => s.id === libSetId)) setLibSetId(libSets[0].id)
+  }, [libSets]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 用例列表：选定集时按标签筛选加载。
+  React.useEffect(() => {
+    if (!hubOnlineForLib || libSetId === '') { setLibData(null); return }
+    let disposed = false
+    setLibData(null)
+    listLibCases(libSetId, { tag: libTag, limit: 50 })
+      .then((v) => { if (!disposed) setLibData({ total: v.total, cases: v.cases || [] }) })
+      .catch(() => { if (!disposed) setLibData({ total: 0, cases: [] }) })
+    return () => { disposed = true }
+  }, [hubOnlineForLib, libSetId, libTag, libReloadKey])
+
   // 设置对话框里保存根目录后同步本面板（根路径显示 + 批次列表）。
   React.useEffect(() => onRootChanged((rp) => {
     if (typeof rp === 'string' && rp !== '') setRootPath(rp)
@@ -596,48 +1115,39 @@ function MockPanel(props) {
 
   const header = React.createElement('div', { className: 'dshmw-header' },
     React.createElement('span', { className: 'dshmw-title' }, 'Mock 实验场'),
-    React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 2 } },
-      React.createElement('button', {
-        type: 'button',
-        className: 'dshmw-headbtn',
-        title: '刷新',
-        'aria-label': '刷新',
-        onClick: () => { setReloadKey((k) => k + 1) },
-      }, React.createElement(SvgIcon, { d: ICONS.refresh, size: 15 })),
-      React.createElement('button', {
-        type: 'button',
-        className: 'dshmw-new',
-        title: '新建',
-        'aria-label': '新建',
-        onClick: () => { setShowForm(!showForm) },
-      },
-        React.createElement(SvgIcon, { d: ICONS.plus, size: 13 }),
-        '新建')))
+    React.createElement('button', {
+      type: 'button',
+      className: 'dshmw-headbtn',
+      title: '刷新',
+      'aria-label': '刷新',
+      onClick: () => { setReloadKey((k) => k + 1) },
+    }, React.createElement(SvgIcon, { d: ICONS.refresh, size: 15 })))
 
-  const body = []
+  // ---- 卡片① 实验批次（批次 = 会话分组，轨迹 = 会话日志） ----
+  const batchBody = []
   if (showForm) {
-    body.push(React.createElement(NewBatchForm, {
+    batchBody.push(React.createElement(NewBatchForm, {
       key: 'form',
       onCreated: () => { setShowForm(false); setReloadKey((k) => k + 1) },
     }))
   }
   if (error) {
-    body.push(React.createElement('div', { key: 'err', className: 'dshmw-status' },
+    batchBody.push(React.createElement('div', { key: 'err', className: 'dshmw-status' },
       React.createElement('span', { className: 'dshmw-err', role: 'alert' }, error),
       React.createElement('button', { type: 'button', className: 'dshmw-retry', onClick: load }, '重试')))
   }
   if (batches === null && !error) {
-    body.push(React.createElement('div', { key: 'loading', className: 'dshmw-status' }, '加载中…'))
+    batchBody.push(React.createElement('div', { key: 'loading', className: 'dshmw-status' }, '加载中…'))
   } else if (batches !== null && batches.length === 0 && !error) {
-    body.push(React.createElement('div', { key: 'empty', className: 'dshmw-empty' },
+    batchBody.push(React.createElement('div', { key: 'empty', className: 'dshmw-empty' },
       React.createElement('div', null, '还没有批次'),
       React.createElement('div', { className: 'dshmw-hint' },
-        '点右上角「+ 新建」：输入一个名字，会创建独立的工作区目录并打开一个普通对话会话，轨迹与产物都会留在这个实验场里。')))
+        '点卡片右上角「+ 新建」：输入一个名字，会创建独立的工作区目录并打开一个普通对话会话，轨迹与产物都会留在这个实验场里。')))
   } else if (batches !== null) {
     batches.forEach((batch) => {
       // 归档批次从列表隐藏（目录与 meta 保留在 runs/ 下）。
       if (batch.meta && batch.meta.status === 'archived') return
-      body.push(React.createElement(BatchRow, {
+      batchBody.push(React.createElement(BatchRow, {
         key: batch.batchId || batch.path,
         batch,
         sessionsById,
@@ -647,9 +1157,255 @@ function MockPanel(props) {
     })
   }
 
+  const batchCard = React.createElement('section', { className: 'dshmw-card' },
+    React.createElement('div', { className: 'dshmw-cardhead' },
+      React.createElement('span', { className: 'dshmw-cardicon' },
+        React.createElement(SvgIcon, { d: ICONS.folder, size: 13 })),
+      React.createElement('span', { className: 'dshmw-cardtitle' }, '实验批次'),
+      React.createElement('button', {
+        type: 'button',
+        className: 'dshmw-cardbtn',
+        title: '新建批次（独立目录 + 对话会话）',
+        onClick: () => { setShowForm(!showForm) },
+      },
+        React.createElement(SvgIcon, { d: ICONS.plus, size: 11 }),
+        '新建')),
+    React.createElement('div', { className: 'dshmw-cardbody' }, batchBody))
+
+  // ---- 卡片③ 接口 Mock（接口级用例，Hub 伺服 /m/<batchId>/<path>） ----
+  const caseBody = []
+  const editingCase = caseEditing !== null && caseEditing !== 'new'
+    ? (cases || []).find((c) => c.id === caseEditing)
+    : null
+  if (caseEditing !== null && (caseEditing === 'new' || editingCase)) {
+    caseBody.push(React.createElement(CaseForm, {
+      key: 'caseform',
+      initial: editingCase || undefined,
+      onCancel: () => setCaseEditing(null),
+      onSubmit: (fields, done, fail) => {
+        const op = caseEditing === 'new'
+          ? createCase(casesBatch, fields)
+          : updateCase(casesBatch, caseEditing, fields)
+        op.then(() => { done(); setCaseEditing(null); reloadCases() }, fail)
+      },
+    }))
+  }
+  if (hubOnlineForCases && activeBatches.length > 0) {
+    caseBody.push(React.createElement('div', { key: 'sel', className: 'dshmw-formrow', style: { padding: '2px 4px' } },
+      React.createElement('select', {
+        className: 'dshmw-select',
+        style: { flex: 1 },
+        value: casesBatch,
+        onChange: (e) => { setCasesBatch(e.target.value); setCaseEditing(null) },
+      }, activeBatches.map((b) =>
+        React.createElement('option', { key: b.batchId, value: b.batchId },
+          (b.meta && b.meta.name) || b.batchId))),
+      React.createElement('span', {
+        className: 'dshmw-huburl',
+        title: 'Mock 接口基址：' + HUB_URL + 'm/' + casesBatch,
+        style: { flex: 'none', maxWidth: '45%' },
+      }, '/m/' + casesBatch)))
+  }
+  if (!hubOnlineForCases) {
+    caseBody.push(React.createElement('div', { key: 'offline', className: 'dshmw-hint', style: { padding: '2px 6px 6px', marginTop: 0 } },
+      '用例数据由产物托管 Hub 承载，先在「产物托管」卡片点「启动」（或手动：node artifact-hub/server.mjs）'))
+  } else if (activeBatches.length === 0) {
+    caseBody.push(React.createElement('div', { key: 'nobatch', className: 'dshmw-hint', style: { padding: '2px 6px 6px', marginTop: 0 } },
+      '先在「实验批次」里新建一个批次'))
+  } else if (cases === null) {
+    caseBody.push(React.createElement('div', { key: 'loading', className: 'dshmw-status' }, '加载中…'))
+  } else if (cases.length === 0 && caseEditing === null) {
+    caseBody.push(React.createElement('div', { key: 'empty', className: 'dshmw-hint', style: { padding: '2px 6px 6px', marginTop: 0 } },
+      '还没有用例。点右上角「+ 新建」定义接口级 Mock（请求方式 / 路径 / 期望响应）。'))
+  } else {
+    cases.forEach((c) => {
+      caseBody.push(React.createElement(CaseRow, {
+        key: c.id,
+        c,
+        onToggle: (cc) => { updateCase(casesBatch, cc.id, { enabled: !cc.enabled }).then(reloadCases).catch(() => {}) },
+        onEdit: (cc) => { setCaseEditing(cc.id) },
+        onDelete: (cc) => { deleteCase(casesBatch, cc.id).then(reloadCases).catch(() => {}) },
+      }))
+    })
+  }
+
+  const caseCard = React.createElement('section', { className: 'dshmw-card' },
+    React.createElement('div', { className: 'dshmw-cardhead' },
+      React.createElement('span', { className: 'dshmw-cardicon' },
+        React.createElement(SvgIcon, { d: ICONS.list, size: 13 })),
+      React.createElement('span', { className: 'dshmw-cardtitle' }, '接口 Mock'),
+      React.createElement('button', {
+        type: 'button',
+        className: 'dshmw-cardbtn',
+        disabled: !hubOnlineForCases || activeBatches.length === 0,
+        title: '新建接口级 Mock 用例',
+        onClick: () => { setCaseEditing(caseEditing === 'new' ? null : 'new') },
+      },
+        React.createElement(SvgIcon, { d: ICONS.plus, size: 11 }),
+        '新建')),
+    React.createElement('div', { className: 'dshmw-cardbody' }, caseBody))
+
+  // ---- 卡片② 用例库（benchmark prompts：导入 / 标签筛选 / 浏览） ----
+  const libBody = []
+  const currentSet = Array.isArray(libSets) ? libSets.find((s) => s.id === libSetId) : null
+  if (!hubOnlineForLib) {
+    libBody.push(React.createElement('div', { key: 'offline', className: 'dshmw-hint', style: { padding: '2px 6px 6px', marginTop: 0 } },
+      '用例库由产物托管 Hub 承载，先在「产物托管」卡片点「启动」'))
+  } else if (libImporting) {
+    libBody.push(React.createElement(LibraryImportForm, {
+      key: 'import',
+      onCancel: () => setLibImporting(false),
+      onImported: (v) => {
+        setLibImporting(false)
+        setLibTag('')
+        setLibReloadKey((k) => k + 1)
+        if (v && v.set && typeof v.set.id === 'string') setLibSetId(v.set.id)
+      },
+    }))
+  } else if (libSets === null) {
+    libBody.push(React.createElement('div', { key: 'loading', className: 'dshmw-status' }, '加载中…'))
+  } else if (libSets.length === 0) {
+    libBody.push(React.createElement('div', { key: 'empty', className: 'dshmw-hint', style: { padding: '2px 6px 6px', marginTop: 0 } },
+      '还没有用例集。点右上角「导入」把 benchmark 数据集（CSV / JSONL / JSON）归一化为 prompt 用例。'))
+  } else {
+    // 集选择 + 标签筛选
+    const tagCounts = currentSet && currentSet.tagCounts ? currentSet.tagCounts : {}
+    const topTags = Object.keys(tagCounts).sort((a, b) => tagCounts[b] - tagCounts[a]).slice(0, 30)
+    libBody.push(React.createElement('div', { key: 'sel', className: 'dshmw-formrow', style: { padding: '2px 6px 4px' } },
+      React.createElement('select', {
+        className: 'dshmw-select',
+        style: { flex: 1 },
+        value: libSetId,
+        onChange: (e) => { setLibSetId(e.target.value); setLibTag(''); setLibConfirmDelete(false) },
+      }, libSets.map((s) =>
+        React.createElement('option', { key: s.id, value: s.id },
+          s.name + ' · ' + s.count))),
+      topTags.length > 0
+        ? React.createElement('select', {
+            className: 'dshmw-select',
+            style: { flex: 1 },
+            value: libTag,
+            title: '按标签筛选',
+            onChange: (e) => setLibTag(e.target.value),
+          }, [React.createElement('option', { key: '', value: '' }, '全部标签')].concat(
+            topTags.map((t) => React.createElement('option', { key: t, value: t }, t + ' · ' + tagCounts[t]))))
+        : null,
+      React.createElement('button', {
+        type: 'button',
+        className: libConfirmDelete ? 'dshmw-batchact dshmw-batchact-danger' : 'dshmw-sessact',
+        title: libConfirmDelete ? '再次点击确认删除该用例集' : '删除该用例集',
+        onClick: () => {
+          if (!libConfirmDelete) { setLibConfirmDelete(true); return }
+          deleteLibSet(libSetId)
+            .then(() => { setLibConfirmDelete(false); setLibReloadKey((k) => k + 1) })
+            .catch((err) => console.warn(err))
+        },
+      }, React.createElement(SvgIcon, { d: ICONS.trash, size: 12 }))))
+    // 用例列表
+    if (libData === null) {
+      libBody.push(React.createElement('div', { key: 'cases-loading', className: 'dshmw-status' }, '加载中…'))
+    } else if (libData.cases.length === 0) {
+      libBody.push(React.createElement('div', { key: 'cases-empty', className: 'dshmw-hint', style: { padding: '2px 6px 6px', marginTop: 0 } },
+        libTag !== '' ? '该标签下没有用例' : '该集为空'))
+    } else {
+      libData.cases.forEach((c) => {
+        libBody.push(React.createElement(LibCaseRow, { key: c.id, c }))
+      })
+      if (libData.total > libData.cases.length) {
+        libBody.push(React.createElement('div', { key: 'more', className: 'dshmw-hint', style: { padding: '2px 6px 6px', marginTop: 0 } },
+          '显示前 ' + libData.cases.length + ' / ' + libData.total + ' 条（用标签筛选缩小范围）'))
+      }
+    }
+  }
+
+  const libCard = React.createElement('section', { className: 'dshmw-card' },
+    React.createElement('div', { className: 'dshmw-cardhead' },
+      React.createElement('span', { className: 'dshmw-cardicon' },
+        React.createElement(SvgIcon, { d: ICONS.book, size: 13 })),
+      React.createElement('span', { className: 'dshmw-cardtitle' }, '用例库'),
+      React.createElement('button', {
+        type: 'button',
+        className: 'dshmw-cardbtn',
+        disabled: !hubOnlineForLib,
+        title: '导入 benchmark 数据集（CSV / JSONL / JSON），归一化为 prompt 用例集',
+        onClick: () => setLibImporting(!libImporting),
+      },
+        React.createElement(SvgIcon, { d: ICONS.upload, size: 11 }),
+        '导入')),
+    React.createElement('div', { className: 'dshmw-cardbody' }, libBody))
+
+  // ---- 卡片④ 产物托管（artifact-hub 总览：状态 + 产物清单，点击直达） ----
+  const hubBody = []
+  const hubOnline = hub !== null && hub.online === true
+  hubBody.push(React.createElement('div', { key: 'hub', className: 'dshmw-hubrow' },
+    React.createElement('span', { className: 'dshmw-hubdot' + (hubOnline ? ' online' : '') }),
+    React.createElement('span', { className: 'dshmw-huburl', title: HUB_URL }, HUB_URL.replace(/\/$/, '')),
+    React.createElement('span', null, hub === null ? '探测中' : hubOnline ? '在线' : '未启动'),
+    (!hubOnline && hub !== null)
+      ? React.createElement('button', {
+          type: 'button',
+          className: 'dshmw-cardbtn',
+          style: { marginLeft: 'auto' },
+          disabled: hubStarting,
+          title: '拉起 artifact-hub/server.mjs（detached 进程，独立于 dsh 常驻）',
+          onClick: startHub,
+        }, hubStarting ? '启动中…' : '启动')
+      : null))
+  if (!hubOnline) {
+    hubBody.push(React.createElement('div', { key: 'hint', className: 'dshmw-hint', style: { padding: '0 6px 6px', marginTop: 0 } },
+      hubStartError !== null
+        ? '启动失败：' + hubStartError + '（可手动运行：node artifact-hub/server.mjs，日志见 artifact-hub/hub.log）'
+        : '点「启动」一键拉起，或手动：node artifact-hub/server.mjs'))
+  } else {
+    const hubBatches = hub.batches || []
+    const total = hubBatches.reduce((n, b) => n + ((b.artifacts || []).length), 0)
+    if (total === 0) {
+      hubBody.push(React.createElement('div', { key: 'none', className: 'dshmw-hint', style: { padding: '0 6px 6px', marginTop: 0 } },
+        'runs/ 下未扫描到产物（index.html / package.json / artifact.json）'))
+    } else {
+      hubBatches.forEach((b) => {
+        const arts = b.artifacts || []
+        if (arts.length === 0) return
+        hubBody.push(React.createElement('div', { key: 'g-' + b.batchId, className: 'dshmw-artgrouplabel', title: b.batchId },
+          (b.name || b.batchId) + ' · ' + arts.length + ' 产物'))
+        arts.forEach((a) => {
+          const st = a.runtime && typeof a.runtime.status === 'string' ? a.runtime.status : 'stopped'
+          hubBody.push(React.createElement('button', {
+            key: a.id,
+            type: 'button',
+            className: 'dshmw-art',
+            title: a.id + (a.runtime && a.runtime.url ? '\n' + a.runtime.url : ''),
+            onClick: () => openHub(a.id),
+          },
+            React.createElement('span', { className: 'dshmw-dot ' + st }),
+            React.createElement('span', { className: 'dshmw-artname' }, a.name || a.id),
+            React.createElement('span', { className: 'dshmw-kind' }, a.kind)))
+        })
+      })
+    }
+  }
+
+  const hubCard = React.createElement('section', { className: 'dshmw-card' },
+    React.createElement('div', { className: 'dshmw-cardhead' },
+      React.createElement('span', { className: 'dshmw-cardicon' },
+        React.createElement(SvgIcon, { d: ICONS.globe, size: 13 })),
+      React.createElement('span', { className: 'dshmw-cardtitle' }, '产物托管'),
+      React.createElement('button', {
+        type: 'button',
+        className: 'dshmw-cardbtn',
+        title: hubOnline ? '在内置浏览器打开托管页（左预览 · 右轨迹）' : 'Hub 未启动 · 先运行 node artifact-hub/server.mjs',
+        onClick: () => openHub(null),
+      },
+        React.createElement(SvgIcon, { d: ICONS.globe, size: 11 }),
+        '打开')),
+    React.createElement('div', { className: 'dshmw-cardbody' }, hubBody))
+
   return React.createElement('div', { className: 'dshmw-root' }, header,
-    rootPath ? React.createElement('div', { className: 'dshmw-rootpath', title: rootPath }, '根: ' + rootPath) : null,
-    React.createElement('div', { className: 'dshmw-list' }, body))
+    batchCard,
+    libCard,
+    caseCard,
+    hubCard,
+    rootPath ? React.createElement('div', { className: 'dshmw-rootpath', title: rootPath }, '根: ' + rootPath) : null)
 }
 
 // ---- apply（模块级；React 由 build.mjs 闭包工厂绑定） ----

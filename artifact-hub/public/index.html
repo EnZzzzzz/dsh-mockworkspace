@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Artifact Hub · Mock 实验场产物托管</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header id="topbar">
+    <div class="brand">
+      <span class="brand-icon">🧪</span>
+      <span class="brand-name">Artifact Hub</span>
+      <span class="brand-sub">Mock 实验场 · 产物托管</span>
+    </div>
+    <div class="topbar-meta">
+      <span id="root-label" class="mono dim" title="mock 根目录"></span>
+      <span id="dsh-label" class="mono dim" title="dsh apiproxy"></span>
+    </div>
+  </header>
+
+  <main id="layout">
+    <!-- 产物栏 -->
+    <aside id="rail">
+      <div class="rail-head">
+        <span>产物</span>
+        <button id="btn-refresh" class="icon-btn" title="重新扫描">↻</button>
+      </div>
+      <div id="artifact-list" class="rail-body">
+        <div class="empty dim">扫描中…</div>
+      </div>
+    </aside>
+
+    <!-- 左：产物预览 -->
+    <section id="preview-pane">
+      <div id="preview-toolbar">
+        <span id="pv-status" class="status-dot stopped" title=""></span>
+        <span id="pv-name" class="pv-name">未选择产物</span>
+        <span id="pv-kind" class="badge"></span>
+        <div class="spacer"></div>
+        <button id="btn-start" class="btn primary" disabled>启动</button>
+        <button id="btn-stop" class="btn" disabled>停止</button>
+        <button id="btn-reload" class="icon-btn" title="刷新预览" disabled>⟳</button>
+        <a id="btn-open" class="icon-btn" title="新标签页打开" target="_blank" rel="noopener" style="display:none">↗</a>
+        <button id="btn-log" class="icon-btn" title="查看日志" disabled>≡</button>
+      </div>
+      <div id="pv-urlbar">
+        <span id="pv-url" class="mono dim"></span>
+      </div>
+      <div id="preview-wrap">
+        <div id="preview-empty" class="empty dim">
+          <p>从左侧选择一个产物</p>
+          <p class="hint">静态产物由 Hub 直接伺服；Node / 自定义命令产物点「启动」分配端口起服务。</p>
+        </div>
+        <iframe id="preview-frame" title="artifact preview" style="display:none"></iframe>
+        <pre id="preview-log" style="display:none"></pre>
+      </div>
+    </section>
+
+    <!-- 右：会话轨迹 -->
+    <section id="trace-pane">
+      <div id="trace-toolbar">
+        <span class="trace-title">执行轨迹</span>
+        <div class="spacer"></div>
+        <select id="session-select" disabled></select>
+        <button id="btn-trace-refresh" class="icon-btn" title="刷新轨迹" disabled>⟳</button>
+      </div>
+      <div id="trace-body">
+        <div class="empty dim">选择产物后自动关联批次会话</div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

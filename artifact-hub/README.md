@@ -1,0 +1,176 @@
+# artifact-hub — Mock 实验场产物托管服务
+
+在 mock workspace 里起一个**独立零依赖 Node 服务**，把会话产出的前端实验
+（纯 HTML / React(Vite) / Node 全栈 / 自定义命令）托管成可访问的 URL，
+并自带管理页：**左边渲染产物，右边看生成它的会话轨迹**。
+
+## 启动
+
+```sh
+node artifact-hub/server.mjs
+# 管理页 → http://127.0.0.1:4780/
+```
+
+| 环境变量 | 默认 | 说明 |
+| --- | --- | --- |
+| `ARTIFACT_HUB_PORT` | `4780` | Hub 端口（只绑 127.0.0.1） |
+| `DSH_API` | `http://127.0.0.1:62274` | dsh apiproxy 基址（轨迹数据源） |
+| `MOCK_ROOT` | `~/.dsh/mock-workspace.json` 的 `root`，退回 cwd | mock 根目录 |
+
+## 产物发现
+
+扫描 `<mock 根>/runs/<batchId>/`（只认带 `meta.json` 的批次目录，即 Mock 实验场
+插件创建的批次），每个**产物根目录**命中以下任一规则：
+
+| 规则 | kind | 托管方式 |
+| --- | --- | --- |
+| 含 `index.html` | `static` | Hub 直接伺服：`http://127.0.0.1:4780/preview/<id>/`（含 SPA 回退） |
+| 含 `package.json` + `scripts.dev/start` | `node` | 分配独立端口（49100+）spawn 子进程；缺 `node_modules` 先自动 `npm install`；等端口就绪后标 running |
+| 含 `artifact.json` | 声明为准 | 自定义，见下 |
+
+产物 id = 相对 `runs/` 的路径（跨批次唯一）。检出产物根后不再向下递归；
+`node_modules`、`.git` 等目录跳过。
+
+### artifact.json（显式声明，覆盖自动检测）
+
+放在产物根目录：
+
+```json
+{
+  "name": "道路反馈后端",
+  "kind": "command",
+  "command": "python3 -m uvicorn app.main:app --host 127.0.0.1 --port {port}",
+  "readyPath": "/"
+}
+```
+
+- `kind: "static"`：按静态目录伺服（可不带 command）
+- `kind: "command"`：Hub 用 shell 执行 `command`，`{port}` 替换为分配端口
+  （同时注入 `PORT` / `HOST` 环境变量），轮询 `readyPath` 判定就绪
+- 适合 Python/Go/Rust 后端、或 npm 之外的任何起服务方式
+
+### Node 产物启动命令推断
+
+| 依赖特征 | 命令 |
+| --- | --- |
+| `vite` / `@vitejs/plugin-react` | `npm run dev -- --port <port> --host 127.0.0.1 --strictPort` |
+| `next` | `npm run dev -- -p <port> -H 127.0.0.1` |
+| 其他（express/koa 等） | `npm run dev` 或 `npm start`，注入 `PORT=<port> HOST=127.0.0.1` |
+
+动态产物直接用 `http://127.0.0.1:<port>/` 作为 URL（iframe 渲染、新标签打开
+都走直连），避免 Vite HMR / WebSocket 经路径前缀代理的问题。
+
+## 轨迹关联
+
+产物 → 批次目录 → 会话：调 dsh apiproxy `session.list`，按 **cwd 前缀匹配**
+批次目录（与 Mock 实验场插件同一规则）；轨迹内容走 `session.history`，
+服务端滤掉 `assistant/chunk` 等噪音事件后映射成时间线：
+
+- `user/message` → 用户消息
+- `assistant/message` → 助手回复（reasoning 折叠）
+- `tool/call` + `tool/result`（按 callId 配对）→ 工具卡片（可展开参数/结果）
+- `turn/start` / `turn/end` → 轮次分隔
+
+会话处于 running 时管理页每 4s 自动增量刷新轨迹。
+
+## Mock 用例（接口级 Mock 伺服）
+
+每个批次目录可存 `mock-cases.json`（用例跟随实验产物），Hub 提供 CRUD API
+并把启用用例伺服成真实可调用的 HTTP 接口：
+
+```
+GET    /api/cases?batchId=
+POST   /api/cases/create   { batchId, case }
+POST   /api/cases/update   { batchId, id, patch }
+POST   /api/cases/delete   { batchId, id }
+ANY    /m/<batchId>/<path>   ← Mock 调度入口
+```
+
+Case 字段：`{ name, method, path, status, delayMs, headers, body, enabled }`。
+匹配规则：`method` + `path` 精确匹配（`path` 支持 `/*` 尾通配做前缀匹配）；
+命中后按 `status` / `headers`（默认 `application/json`）/ `delayMs` 返回 `body`，
+未命中返回 404 并列出当前可用接口；同 `method+path` 只允许一条。
+`batchId` 必须是 `runs/` 下带 `meta.json` 的目录名（防越界）。
+
+管理入口：Mock 实验场侧边栏面板「接口 Mock」卡片（批次选择 + 开关 + 编辑），
+或直接调上述 API。
+
+## 用例库（benchmark prompts）
+
+全局 prompt 用例库，**不属于任何批次**（批次是用例的运行结果）。语义层三层
+抽象：**CaseSet（用例集）→ Case（用例）**，**Importer（导入器）= parser +
+字段映射**——只在导入时存在，落库即规范形态，之后所有消费方只认一种 schema；
+支持新 benchmark = 新增一个字段映射，不动存储与消费侧。
+
+Case 规范形态（导入时归一化）：
+
+```
+{ id, setId, sourceRef, prompt, language, tags[], meta{} }
+```
+
+- `prompt`：唯一必填的一等公民
+- `sourceRef`：源数据集原始 id（去重 + 回溯纽带），缺失时取 prompt 的 FNV 哈希
+- `tags`：扁平筛选维度（从映射指定列抽取）
+- `meta`：**不透明袋子**——原始行其余列原样保留，schema 不解释（评测/分析时取数）
+
+存储：`<mock 根>/case-library/<setId>/{ set.json, cases.jsonl }`（JSONL 追加
+友好，5000+ 行无压力；set.json 记 count / tagCounts / source.mapping）。
+
+```
+GET  /api/library/sets
+POST /api/library/preview     { path|content, fileName?, format? } → 列名+样例行+猜测映射（不写盘）
+POST /api/library/import      { path|content, name?, setId?, mapping{ promptColumn, refColumn?, languageColumn?, tagColumns?[] } }
+GET  /api/library/cases?setId=&tag=&q=&offset=&limit=   （limit ≤ 200）
+POST /api/library/delete-set  { setId }
+```
+
+- 解析器：CSV（RFC-4180：引号/转义/字段内换行）/ JSONL / JSON（数组或
+  `{data|items|rows:[]}`）；格式省略时按扩展名猜，退回 csv
+- 映射自动猜测：prompt 列认 `query_text/prompt/question/input/query/…`，
+  标签列认 `l\d+_label/platform/category/domain/…`，可在面板导入表单里改
+- 重复导入同一 `setId` 按 `sourceRef` 去重合并；不指定 `setId` 则按名称生成
+  唯一 slug 建新集
+- 路径导入安全边界：仅允许 HOME、mock 根及其**父目录**（benchmark 数据集常与
+  mock 根并列），拒绝 `.ssh/.aws/.gnupg` 等敏感目录与 `*.pem/*.key` 密钥文件；
+  额外白名单用 `ARTIFACT_HUB_IMPORT_ROOTS`（冒号分隔）追加
+
+管理入口：Mock 实验场侧边栏面板「用例库」卡片（集选择 + 标签筛选 + 两步
+导入表单：解析 → 字段映射 + 样例预览 → 确认导入）。
+
+## 管理页布局
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ 🧪 Artifact Hub                    mock 根 · dsh api     │
+├─────────┬───────────────────────────────┬────────────────┤
+│ 产物栏   │ 工具栏：状态点 名称 启动/停止  │ 会话选择 +     │
+│ (批次    │ URL 栏                        │ 轨迹时间线     │
+│  分组)   │ iframe 渲染 / 进程日志        │ (自动刷新)     │
+└─────────┴───────────────────────────────┴────────────────┘
+```
+
+## HTTP API
+
+| 端点 | 说明 |
+| --- | --- |
+| `GET /api/state` | 全量状态：批次 + 产物 + 运行时（status/url/port/logTail） |
+| `POST /api/artifacts/start` `{id}` | 启动（静态幂等返回 URL） |
+| `POST /api/artifacts/stop` `{id}` | 停止（进程组 SIGTERM → SIGKILL） |
+| `GET /api/artifacts/log?id=` | 子进程日志（环形缓冲尾部 200 行） |
+| `GET /api/trajectory?batchId=` | 批次关联会话列表 |
+| `GET /api/trajectory/events?sessionId=` | 简化轨迹时间线 |
+| `GET /api/library/*` | 用例库（benchmark prompts），见上节 |
+| `GET /preview/<id>/...` | 静态产物伺服 |
+
+## 安全边界
+
+- 只监听 `127.0.0.1`；只读 mock 根内文件；预览路径做 `..`/越界校验
+- 子进程独立进程组，Hub 退出（SIGINT/SIGTERM）时全部清理
+- Hub 重启后不接管旧进程（状态为内存态），原占用端口会被分配逻辑跳过
+
+## 已知限制（MVP）
+
+- 无鉴权（仅限本机 loopback 使用）
+- 轨迹分页固定拉最近 2000 条消息；超长会话只显示尾部
+- Node 产物非 vite/next 时只注入 `PORT`，不认 `PORT` 的老式服务需用
+  `artifact.json` 显式声明 command
