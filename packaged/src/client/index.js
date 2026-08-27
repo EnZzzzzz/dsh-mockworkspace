@@ -78,6 +78,9 @@ const ICONS = {
   pencil: 'M2 14 L2.9 10.6 L10.6 2.9 A1.4 1.4 0 0 1 12.6 4.9 L4.9 12.6 Z M9.6 3.9 L11.6 5.9',
   book: 'M4 2.5 H12.5 A1 1 0 0 1 13.5 3.5 V12.5 A1 1 0 0 1 12.5 13.5 H4 A1.5 1.5 0 0 1 2.5 12 V4 A1.5 1.5 0 0 1 4 2.5 Z M2.5 11 A1.5 1.5 0 0 1 4 9.5 H13.5',
   upload: 'M8 10.5 V2.5 M5 5.5 L8 2.5 L11 5.5 M3 12.5 H13',
+  chevron: 'M3 6 L8 11 L13 6',
+  chevL: 'M10 3 L5 8 L10 13',
+  chevR: 'M6 3 L11 8 L6 13',
 }
 
 // 产物托管 Hub（artifact-hub/server.mjs）管理页地址；改端口需与
@@ -92,9 +95,14 @@ const CSS = `
 .dshmw-headbtn{flex:none;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:none;border-radius:6px;padding:0;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary)}
 .dshmw-headbtn:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
 .dshmw-card{flex:none;border:1px solid var(--dsw-alias-border-l1);border-radius:10px}
-.dshmw-cardhead{display:flex;align-items:center;gap:6px;padding:6px 8px 6px 10px;border-bottom:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-secondary)}
-.dshmw-cardicon{flex:none;display:inline-flex}
-.dshmw-cardtitle{flex:1;min-width:0;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.dshmw-cardhead{display:flex;align-items:center;gap:6px;padding:6px 8px 6px 6px;border-bottom:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-secondary)}
+.dshmw-collapse{flex:none;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border:none;border-radius:5px;padding:0;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary)}
+.dshmw-collapse:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
+.dshmw-chev{transition:transform .15s ease}
+.dshmw-card-closed .dshmw-chev{transform:rotate(-90deg)}
+.dshmw-card-closed .dshmw-cardhead{border-bottom:none}
+.dshmw-cardicon{flex:none;display:inline-flex;cursor:pointer}
+.dshmw-cardtitle{flex:1;min-width:0;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;cursor:pointer}
 .dshmw-cardbtn{flex:none;display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:11px;font-family:inherit}
 .dshmw-cardbtn:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
 .dshmw-cardbody{padding:4px}
@@ -161,6 +169,25 @@ const CSS = `
 .dshmw-textarea{width:100%;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:11px;padding:5px 8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical;min-height:56px}
 .dshmw-textarea:focus{outline:none;border-color:var(--dsw-alias-border-l2)}
 .dshmw-fieldlabel{font-size:10px;color:var(--dsw-alias-label-secondary);opacity:.8}
+.dshmw-librow{display:flex;flex-direction:column;gap:4px;margin:2px 2px 6px;padding:6px 8px;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-1)}
+.dshmw-libhead{display:flex;align-items:center;gap:6px;min-width:0}
+.dshmw-libref{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;color:var(--dsw-alias-label-secondary);opacity:.85}
+.dshmw-liblang{flex:none;border-radius:4px;padding:0 5px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)}
+.dshmw-libprompt{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary);cursor:pointer;border-radius:4px}
+.dshmw-libprompt:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1)}
+.dshmw-libprompt.open{display:block;overflow:visible;white-space:pre-wrap;overflow-wrap:break-word;color:var(--dsw-alias-label-primary)}
+.dshmw-tags{display:flex;flex-wrap:wrap;gap:4px}
+.dshmw-tag{flex:none;border-radius:4px;padding:0 6px;font-size:10px;line-height:16px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:120px}
+.dshmw-libpager{display:flex;align-items:center;gap:4px;padding:2px 4px 4px;box-sizing:border-box}
+.dshmw-pgbtn{flex:none;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary)}
+.dshmw-pgbtn:hover:not(:disabled){background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
+.dshmw-pgbtn:disabled{opacity:.35;cursor:default}
+.dshmw-pginfo{flex:1;min-width:0;text-align:center;font-size:11px;color:var(--dsw-alias-label-secondary);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.dshmw-libscroll{max-height:min(42vh,380px);overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;padding:2px;box-sizing:border-box}
+.dshmw-libscroll .dshmw-librow{flex:none}
+.dshmw-libscroll::-webkit-scrollbar{width:6px}
+.dshmw-libscroll::-webkit-scrollbar-thumb{background:var(--dsw-alias-border-l2,#d0d5dc);border-radius:3px}
+.dshmw-libscroll::-webkit-scrollbar-track{background:transparent}
 .dshmw-setrow{border-bottom:1px solid var(--dsw-alias-border-l2);padding:16px 0;display:flex;flex-direction:column;gap:8px}
 .dshmw-setrow-head{display:flex;align-items:center;gap:8px}
 .dshmw-setrow-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;padding-right:12px}
@@ -251,6 +278,8 @@ const importLib = (payload) => hubApi('library/import', {
   method: 'POST', headers: { 'content-type': 'application/json' },
   body: JSON.stringify(payload),
 })
+// 用例库每页条数（一页最多 20 条，支持翻页）
+const LIB_PAGE_SIZE = 20
 const listLibCases = (setId, opts) => {
   const o = opts || {}
   const qs = 'setId=' + encodeURIComponent(setId)
@@ -785,6 +814,27 @@ function BatchRow(props) {
 }
 
 // ---- panel entry ----
+// ---- 可折叠卡片（实验批次 / 用例库 / 产物托管通用）：箭头 / 图标 / 标题点击折叠 ----
+function MockCard(props) {
+  const [open, setOpen] = React.useState(true)
+  const toggle = () => setOpen((v) => !v)
+  const headTip = open ? '折叠卡片' : '展开卡片'
+  return React.createElement('section', { className: 'dshmw-card' + (open ? '' : ' dshmw-card-closed') },
+    React.createElement('div', { className: 'dshmw-cardhead' },
+      React.createElement('button', {
+        type: 'button',
+        className: 'dshmw-collapse',
+        title: headTip,
+        'aria-expanded': open,
+        onClick: toggle,
+      }, React.createElement(SvgIcon, { d: ICONS.chevron, size: 10, className: 'dshmw-chev' })),
+      React.createElement('span', { className: 'dshmw-cardicon', title: headTip, onClick: toggle },
+        React.createElement(SvgIcon, { d: props.icon, size: 13 })),
+      React.createElement('span', { className: 'dshmw-cardtitle', title: headTip, onClick: toggle }, props.title),
+      props.actions || null),
+    open ? React.createElement('div', { className: 'dshmw-cardbody' }, props.children) : null)
+}
+
 function MockPanel(props) {
   if (props.activePanelId !== props.panelId) return null
 
@@ -883,6 +933,7 @@ function MockPanel(props) {
   const [libImporting, setLibImporting] = React.useState(false)
   const [libReloadKey, setLibReloadKey] = React.useState(0)
   const [libConfirmDelete, setLibConfirmDelete] = React.useState(false)
+  const [libPage, setLibPage] = React.useState(1) // 用例列表当前页（从 1 起）
 
   const hubOnlineForLib = hub !== null && hub.online === true
   // 用例集列表：Hub 在线时加载。
@@ -902,16 +953,23 @@ function MockPanel(props) {
     if (libSetId === '' || !libSets.some((s) => s.id === libSetId)) setLibSetId(libSets[0].id)
   }, [libSets]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 用例列表：选定集时按标签筛选加载。
+  // 用例列表：选定集时按标签筛选分页加载（一页最多 20 条）。
   React.useEffect(() => {
     if (!hubOnlineForLib || libSetId === '') { setLibData(null); return }
     let disposed = false
     setLibData(null)
-    listLibCases(libSetId, { tag: libTag, limit: 50 })
+    listLibCases(libSetId, { tag: libTag, offset: (libPage - 1) * LIB_PAGE_SIZE, limit: LIB_PAGE_SIZE })
       .then((v) => { if (!disposed) setLibData({ total: v.total, cases: v.cases || [] }) })
       .catch(() => { if (!disposed) setLibData({ total: 0, cases: [] }) })
     return () => { disposed = true }
-  }, [hubOnlineForLib, libSetId, libTag, libReloadKey])
+  }, [hubOnlineForLib, libSetId, libTag, libPage, libReloadKey])
+
+  // 页码越界自动回退（切换集/标签/删除集后总页数可能变少）。
+  const libTotalPages = libData ? Math.max(1, Math.ceil(libData.total / LIB_PAGE_SIZE)) : 1
+  React.useEffect(() => {
+    if (libPage < 1) { setLibPage(1); return }
+    if (libPage > libTotalPages) setLibPage(libTotalPages)
+  }, [libPage, libTotalPages])
 
   // 设置对话框里保存根目录后同步本面板（根路径显示 + 批次列表）。
   React.useEffect(() => onRootChanged((rp) => {
@@ -966,20 +1024,18 @@ function MockPanel(props) {
     })
   }
 
-  const batchCard = React.createElement('section', { className: 'dshmw-card' },
-    React.createElement('div', { className: 'dshmw-cardhead' },
-      React.createElement('span', { className: 'dshmw-cardicon' },
-        React.createElement(SvgIcon, { d: ICONS.folder, size: 13 })),
-      React.createElement('span', { className: 'dshmw-cardtitle' }, '实验批次'),
-      React.createElement('button', {
-        type: 'button',
-        className: 'dshmw-cardbtn',
-        title: '新建批次（独立目录 + 对话会话）',
-        onClick: () => { setShowForm(!showForm) },
-      },
-        React.createElement(SvgIcon, { d: ICONS.plus, size: 11 }),
-        '新建')),
-    React.createElement('div', { className: 'dshmw-cardbody' }, batchBody))
+  const batchCard = React.createElement(MockCard, {
+    icon: ICONS.folder,
+    title: '实验批次',
+    actions: React.createElement('button', {
+      type: 'button',
+      className: 'dshmw-cardbtn',
+      title: '新建批次（独立目录 + 对话会话）',
+      onClick: () => { setShowForm(!showForm) },
+    },
+      React.createElement(SvgIcon, { d: ICONS.plus, size: 11 }),
+      '新建'),
+  }, batchBody)
 
   // ---- 卡片② 用例库（benchmark prompts：导入 / 标签筛选 / 浏览） ----
   const libBody = []
@@ -994,6 +1050,7 @@ function MockPanel(props) {
       onImported: (v) => {
         setLibImporting(false)
         setLibTag('')
+        setLibPage(1)
         setLibReloadKey((k) => k + 1)
         if (v && v.set && typeof v.set.id === 'string') setLibSetId(v.set.id)
       },
@@ -1012,7 +1069,7 @@ function MockPanel(props) {
         className: 'dshmw-select',
         style: { flex: 1 },
         value: libSetId,
-        onChange: (e) => { setLibSetId(e.target.value); setLibTag(''); setLibConfirmDelete(false) },
+        onChange: (e) => { setLibSetId(e.target.value); setLibTag(''); setLibConfirmDelete(false); setLibPage(1) },
       }, libSets.map((s) =>
         React.createElement('option', { key: s.id, value: s.id },
           s.name + ' · ' + s.count))),
@@ -1022,7 +1079,7 @@ function MockPanel(props) {
             style: { flex: 1 },
             value: libTag,
             title: '按标签筛选',
-            onChange: (e) => setLibTag(e.target.value),
+            onChange: (e) => { setLibTag(e.target.value); setLibPage(1) },
           }, [React.createElement('option', { key: '', value: '' }, '全部标签')].concat(
             topTags.map((t) => React.createElement('option', { key: t, value: t }, t + ' · ' + tagCounts[t]))))
         : null,
@@ -1033,7 +1090,7 @@ function MockPanel(props) {
         onClick: () => {
           if (!libConfirmDelete) { setLibConfirmDelete(true); return }
           deleteLibSet(libSetId)
-            .then(() => { setLibConfirmDelete(false); setLibReloadKey((k) => k + 1) })
+            .then(() => { setLibConfirmDelete(false); setLibPage(1); setLibReloadKey((k) => k + 1) })
             .catch((err) => console.warn(err))
         },
       }, React.createElement(SvgIcon, { d: ICONS.trash, size: 12 }))))
@@ -1044,31 +1101,43 @@ function MockPanel(props) {
       libBody.push(React.createElement('div', { key: 'cases-empty', className: 'dshmw-hint', style: { padding: '2px 6px 6px', marginTop: 0 } },
         libTag !== '' ? '该标签下没有用例' : '该集为空'))
     } else {
-      libData.cases.forEach((c) => {
-        libBody.push(React.createElement(LibCaseRow, { key: c.id, c }))
-      })
-      if (libData.total > libData.cases.length) {
-        libBody.push(React.createElement('div', { key: 'more', className: 'dshmw-hint', style: { padding: '2px 6px 6px', marginTop: 0 } },
-          '显示前 ' + libData.cases.length + ' / ' + libData.total + ' 条（用标签筛选缩小范围）'))
-      }
+      libBody.push(React.createElement('div', { key: 'scroll', className: 'dshmw-libscroll' },
+        libData.cases.map((c) => React.createElement(LibCaseRow, { key: c.id, c }))))
+      libBody.push(React.createElement('div', { key: 'pager', className: 'dshmw-libpager' },
+        React.createElement('button', {
+          type: 'button',
+          className: 'dshmw-pgbtn',
+          disabled: libPage <= 1,
+          title: '上一页',
+          onClick: () => setLibPage((p) => Math.max(1, p - 1)),
+        }, React.createElement(SvgIcon, { d: ICONS.chevL, size: 10 })),
+        React.createElement('span', {
+          className: 'dshmw-pginfo',
+          title: '共 ' + libData.total + ' 条 · 每页 ' + LIB_PAGE_SIZE + ' 条',
+        }, '第 ' + libPage + ' / ' + libTotalPages + ' 页 · ' + libData.total + ' 条'),
+        React.createElement('button', {
+          type: 'button',
+          className: 'dshmw-pgbtn',
+          disabled: libPage >= libTotalPages,
+          title: '下一页',
+          onClick: () => setLibPage((p) => Math.min(libTotalPages, p + 1)),
+        }, React.createElement(SvgIcon, { d: ICONS.chevR, size: 10 }))))
     }
   }
 
-  const libCard = React.createElement('section', { className: 'dshmw-card' },
-    React.createElement('div', { className: 'dshmw-cardhead' },
-      React.createElement('span', { className: 'dshmw-cardicon' },
-        React.createElement(SvgIcon, { d: ICONS.book, size: 13 })),
-      React.createElement('span', { className: 'dshmw-cardtitle' }, '用例库'),
-      React.createElement('button', {
-        type: 'button',
-        className: 'dshmw-cardbtn',
-        disabled: !hubOnlineForLib,
-        title: '导入 benchmark 数据集（CSV / JSONL / JSON），归一化为 prompt 用例集',
-        onClick: () => setLibImporting(!libImporting),
-      },
-        React.createElement(SvgIcon, { d: ICONS.upload, size: 11 }),
-        '导入')),
-    React.createElement('div', { className: 'dshmw-cardbody' }, libBody))
+  const libCard = React.createElement(MockCard, {
+    icon: ICONS.book,
+    title: '用例库',
+    actions: React.createElement('button', {
+      type: 'button',
+      className: 'dshmw-cardbtn',
+      disabled: !hubOnlineForLib,
+      title: '导入 benchmark 数据集（CSV / JSONL / JSON），归一化为 prompt 用例集',
+      onClick: () => setLibImporting(!libImporting),
+    },
+      React.createElement(SvgIcon, { d: ICONS.upload, size: 11 }),
+      '导入'),
+  }, libBody)
 
   // ---- 卡片③ 产物托管（artifact-hub 总览：状态 + 产物清单，点击直达） ----
   const hubBody = []
@@ -1121,20 +1190,18 @@ function MockPanel(props) {
     }
   }
 
-  const hubCard = React.createElement('section', { className: 'dshmw-card' },
-    React.createElement('div', { className: 'dshmw-cardhead' },
-      React.createElement('span', { className: 'dshmw-cardicon' },
-        React.createElement(SvgIcon, { d: ICONS.globe, size: 13 })),
-      React.createElement('span', { className: 'dshmw-cardtitle' }, '产物托管'),
-      React.createElement('button', {
-        type: 'button',
-        className: 'dshmw-cardbtn',
-        title: hubOnline ? '在内置浏览器打开托管页（左预览 · 右轨迹）' : 'Hub 未启动 · 先运行 node artifact-hub/server.mjs',
-        onClick: () => openHub(null),
-      },
-        React.createElement(SvgIcon, { d: ICONS.globe, size: 11 }),
-        '打开')),
-    React.createElement('div', { className: 'dshmw-cardbody' }, hubBody))
+  const hubCard = React.createElement(MockCard, {
+    icon: ICONS.globe,
+    title: '产物托管',
+    actions: React.createElement('button', {
+      type: 'button',
+      className: 'dshmw-cardbtn',
+      title: hubOnline ? '在内置浏览器打开托管页（左预览 · 右轨迹）' : 'Hub 未启动 · 先运行 node artifact-hub/server.mjs',
+      onClick: () => openHub(null),
+    },
+      React.createElement(SvgIcon, { d: ICONS.globe, size: 11 }),
+      '打开'),
+  }, hubBody)
 
   return React.createElement('div', { className: 'dshmw-root' }, header,
     batchCard,
