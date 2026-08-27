@@ -234,6 +234,11 @@ return {
           createdAt: Date.now(),
           status: 'active',
         }
+        // 可选：用例关联（右键用例「用该用例开跑」时写入，供归档时间线按用例聚合）
+        if (args && typeof args.caseId === 'string' && args.caseId !== '') meta.caseId = args.caseId
+        if (args && typeof args.caseSetId === 'string' && args.caseSetId !== '') meta.caseSetId = args.caseSetId
+        if (args && typeof args.sourceRef === 'string' && args.sourceRef !== '') meta.sourceRef = args.sourceRef
+        if (args && typeof args.promptHash === 'string' && args.promptHash !== '') meta.promptHash = args.promptHash
         await writeMeta(batchPath, meta)
 
         // 不注册 workspace：会话由后端 session.create({ cwd }) 创建，cwd 指向
@@ -304,6 +309,116 @@ return {
         meta.status = 'archived'
         await writeMeta(path, meta)
         return { ok: true, path, meta }
+      } catch (err) {
+        return { ok: false, error: errorText(err) }
+      }
+    })
+
+    // ---- 归档工具：扫描产物 + 快照复制 + record.json ----
+    const ARCHIVE_SKIP_DIRS = new Set(['node_modules', '.git', '.next', '.turbo', '.cache'])
+    const baseName = (p) => String(p || '').split('/').filter(Boolean).pop() || ''
+    const safeName = (s) => String(s || 'dist').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'dist'
+    // 递归复制目录（跳过 node_modules/.git 等重目录），shell cp 逐项执行。
+    async function copyTree(srcDir, destDir, skip) {
+      if (fs === undefined || shell === undefined) throw new Error('fs/shell 服务不可用')
+      await mkdirp(destDir)
+      const target = await resolveTarget(srcDir)
+      const raw = await fs.listDir(target)
+      const cpOne = async (srcEntry, destEntry) => {
+        const request = { command: 'cp "' + srcEntry.replace(/"/g, '\\"') + '" "' + destEntry.replace(/"/g, '\\"') + '"' }
+        let spec
+        try { spec = shell.resolve(request) } catch (err) { spec = request }
+        const result = await shell.run(spec)
+        if (result.exitCode !== 0) {
+          throw new Error('复制失败: ' + (result.stderr || result.stdout || 'unknown'))
+        }
+      }
+      for (const e of raw) {
+        if (e.type !== 'file' && e.type !== 'directory') continue
+        if (skip && skip.has(e.name)) continue
+        if (e.type === 'directory') {
+          await copyTree(joinPath(srcDir, e.name), joinPath(destDir, e.name), skip)
+        } else {
+          await cpOne(joinPath(srcDir, e.name), joinPath(destDir, e.name))
+        }
+      }
+    }
+    // 扫描批次目录产物根（与 Hub 检出规则一致：dist/index.html 优先，其次 index.html）。
+    async function scanBatchArtifacts(batchDir) {
+      const found = []
+      const walk = async (dir, depth) => {
+        if (depth > 3) return
+        let raw
+        try {
+          const target = await resolveTarget(dir)
+          raw = await fs.listDir(target)
+        } catch (err) { return }
+        const fileNames = new Set(raw.filter((e) => e.type === 'file').map((e) => e.name))
+        const subdirs = raw.filter((e) => e.type === 'directory')
+        for (const sd of subdirs) {
+          if (sd.name !== 'dist') continue
+          if (await statExists(joinPath(dir, 'dist/index.html'))) {
+            found.push({ name: baseName(dir) || 'dist', kind: 'dist', rootPath: joinPath(dir, 'dist') })
+            return // 命中即止，不再下钻
+          }
+        }
+        if (fileNames.has('index.html')) {
+          found.push({ name: baseName(dir) || 'site', kind: 'static', rootPath: dir })
+          return
+        }
+        for (const sd of subdirs) {
+          if (ARCHIVE_SKIP_DIRS.has(sd.name)) continue
+          await walk(joinPath(dir, sd.name), depth + 1)
+        }
+      }
+      await walk(batchDir, 0)
+      return found
+    }
+
+    // ---- RPC：归档会话（产物快照 + 会话记录，供 Hub「用例迭代」时间线） ----
+    // args: { sessionId, batchPath } → 扫批次目录产物 → 快照复制到
+    // <mock根>/case-library/archives/<batchId>/<ts>/ → 写 record.json。
+    // 不依赖 Hub 在线：Hub 启动后扫 archives/ 目录即出迭代时间线。
+    harness.handle('mock.archive-session', async (args) => {
+      try {
+        const sessionId = args && typeof args.sessionId === 'string' ? args.sessionId : ''
+        const batchPath = args && typeof args.batchPath === 'string' ? args.batchPath : ''
+        if (sessionId === '' || batchPath === '') return { ok: false, error: '缺 sessionId / batchPath' }
+        if (!insideMockRoot(batchPath)) return { ok: false, error: '路径不在 mock 工作区内' }
+        const meta = await readMeta(batchPath)
+        if (meta === null) return { ok: false, error: '未找到批次元数据' }
+
+        const batchId = (meta && meta.batchId) || baseName(batchPath)
+        const now = new Date()
+        const pad = (n, w) => String(n).padStart(w, '0')
+        const ts = pad(now.getFullYear(), 4) + pad(now.getMonth() + 1, 2) + pad(now.getDate(), 2)
+          + '-' + pad(now.getHours(), 2) + pad(now.getMinutes(), 2) + pad(now.getSeconds(), 2)
+        const archivesRoot = joinPath(joinPath(mockRoot(), 'case-library'), 'archives')
+        const archiveDir = joinPath(joinPath(archivesRoot, batchId), ts)
+        await mkdirp(archiveDir)
+
+        const artifacts = await scanBatchArtifacts(batchPath)
+        const snapshots = []
+        for (const a of artifacts) {
+          const snapName = a.kind === 'dist' ? safeName(a.name) + '-dist' : safeName(a.name) + '-site'
+          await copyTree(a.rootPath, joinPath(archiveDir, snapName), ARCHIVE_SKIP_DIRS)
+          snapshots.push({ name: a.name, kind: a.kind, snapshotDir: snapName })
+        }
+
+        const record = {
+          archiveId: batchId + '/' + ts,
+          batchId,
+          batchName: (meta && meta.name) || batchId,
+          sessionId,
+          caseId: (meta && meta.caseId) || '',
+          caseSetId: (meta && meta.caseSetId) || '',
+          promptHash: (meta && meta.promptHash) || '',
+          archivedAt: now.toISOString(),
+          artifacts: snapshots,
+        }
+        const recordTarget = await resolveTarget(joinPath(archiveDir, 'record.json'))
+        await fs.writeText(recordTarget, JSON.stringify(record, null, 2))
+        return { ok: true, record }
       } catch (err) {
         return { ok: false, error: errorText(err) }
       }

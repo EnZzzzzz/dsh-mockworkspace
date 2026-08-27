@@ -11,6 +11,9 @@ const state = {
   sessions: [],         // 当前批次的会话
   sessionId: null,      // 当前轨迹会话
   showLog: false,
+  iterations: [],       // 归档时间线条目（scanArchives）
+  iterCaseFilter: '',   // 按用例筛选
+  forked: {},           // `${batchId}|${sessionId}` → 分叉出的新会话 id
 }
 
 // ---------------------------------------------------------------- 工具
@@ -252,6 +255,115 @@ async function loadTrace() {
   }
 }
 
+// ---------------------------------------------------------------- 用例迭代（归档时间线）
+
+async function loadIterations(rebuildFilter = false) {
+  try {
+    const q = state.iterCaseFilter ? '?caseId=' + encodeURIComponent(state.iterCaseFilter) : ''
+    const v = await api('/api/iterations' + q)
+    state.iterations = v.entries
+    renderIterations(rebuildFilter)
+  } catch (err) {
+    $('#iter-body').innerHTML = `<div class="trace-item trace-error">迭代时间线加载失败：${esc(err.message)}</div>`
+  }
+}
+
+function iterTs(e) {
+  return String(e.archiveId || '').split('/')[1] || ''
+}
+
+function renderIterations(rebuildFilter = false) {
+  const body = $('#iter-body')
+  if (state.iterations.length === 0) {
+    body.innerHTML = '<div class="empty dim">还没有归档记录。<br><span class="hint">在 dsh Mock 实验场的批次会话上点「归档」按钮，即归档产物快照 + 会话记录（含用例 ID / 日期）。</span></div>'
+    if (rebuildFilter) rebuildIterFilter()
+    return
+  }
+  // 按用例分组；未关联用例的归档按批次聚合到「未关联用例」
+  const groups = new Map()
+  for (const e of state.iterations) {
+    const key = e.caseId || '未关联用例'
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(e)
+  }
+  const html = [...groups.entries()].map(([key, list]) => `
+    <div class="iter-group">
+      <div class="iter-group-title" title="${esc(key)}">${esc(key)} <span class="dim">· ${list.length} 次归档</span></div>
+      ${list.map(renderIterRow).join('')}
+    </div>`).join('')
+  body.innerHTML = html
+  body.querySelectorAll('[data-act="trace"]').forEach((el) => {
+    el.addEventListener('click', () => jumpToTrace(el.dataset.batch, el.dataset.session))
+  })
+  body.querySelectorAll('[data-act="fork"]').forEach((el) => {
+    el.addEventListener('click', () => forkIteration(el))
+  })
+  if (rebuildFilter) rebuildIterFilter()
+}
+
+function renderIterRow(e) {
+  const ts = iterTs(e)
+  const snapLinks = (e.artifacts || []).filter((a) => a.snapshotDir).map((a) => {
+    const url = `/archive/${encodeURIComponent(e.batchId)}/${encodeURIComponent(ts)}/${encodeURIComponent(a.snapshotDir)}/`
+    return `<a class="iter-link" href="${url}" target="_blank" rel="noopener" title="${esc(url)}">预览·${esc(a.name)}</a>`
+  }).join(' ')
+  const fk = state.forked[e.batchId + '|' + e.sessionId]
+  const forkCell = fk
+    ? `<span class="iter-forked" title="新会话 ${esc(fk)}：到 dsh Mock 实验场批次下刷新并打开，继续提改进意见">已分叉 → ${esc(String(fk).slice(0, 12))}…</span>`
+    : `<button type="button" class="iter-btn" data-act="fork" data-batch="${esc(e.batchId)}" data-session="${esc(e.sessionId)}" title="分叉该会话（继承全部上下文），在新会话里继续迭代">继续对话</button>`
+  const date = e.archivedAt ? new Date(e.archivedAt).toLocaleString('zh-CN', { hour12: false }) : ''
+  return `<div class="iter-row">
+    <span class="iter-date" title="${esc(e.archivedAt || '')}">${esc(date)}</span>
+    <span class="iter-meta" title="批次 ${esc(e.batchId)}">${esc(e.batchName)}</span>
+    <span class="iter-sess mono" title="会话 ${esc(e.sessionId)}">${esc(String(e.sessionId || '').slice(0, 12))}</span>
+    <span class="iter-art">${snapLinks || '<span class="dim">无快照</span>'}</span>
+    <span class="iter-acts">
+      <button type="button" class="iter-btn" data-act="trace" data-batch="${esc(e.batchId)}" data-session="${esc(e.sessionId)}" title="查看该会话执行轨迹">轨迹</button>
+      ${forkCell}
+    </span>
+  </div>`
+}
+
+function rebuildIterFilter() {
+  const sel = $('#iter-case-filter')
+  const ids = [...new Set(state.iterations.map((e) => e.caseId || '').filter(Boolean))]
+  sel.innerHTML = '<option value="">全部用例</option>' + ids.map((id) =>
+    `<option value="${esc(id)}"${id === state.iterCaseFilter ? ' selected' : ''}>${esc(id)}</option>`).join('')
+}
+
+function jumpToTrace(batchId, sessionId) {
+  state.sessionId = sessionId
+  $('#trace-body').innerHTML = '<div class="empty dim">加载会话…</div>'
+  loadSessions(batchId).then(() => {
+    const sel = $('#session-select')
+    if (sel.value !== sessionId) {
+      sel.value = sessionId
+      state.sessionId = sessionId
+    }
+    loadTrace()
+  })
+}
+
+async function forkIteration(el) {
+  const batchId = el.dataset.batch
+  const sessionId = el.dataset.session
+  el.disabled = true
+  el.textContent = '分叉中…'
+  try {
+    const v = await api('/api/iterations/fork', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    })
+    state.forked[batchId + '|' + sessionId] = v.sessionId
+    renderIterations()
+  } catch (err) {
+    el.disabled = false
+    el.textContent = '继续对话'
+    alert('分叉失败：' + err.message)
+  }
+}
+
 // ---------------------------------------------------------------- 选择 & 刷新
 
 async function selectArtifact(id) {
@@ -351,12 +463,22 @@ $('#session-select').addEventListener('change', (e) => {
 
 $('#btn-trace-refresh').addEventListener('click', () => loadTrace())
 
+$('#btn-iter-refresh').addEventListener('click', () => loadIterations(true))
+$('#iter-case-filter').addEventListener('change', (e) => {
+  state.iterCaseFilter = e.target.value
+  loadIterations(true)
+})
+
 // ---------------------------------------------------------------- 轮询
 
-setInterval(() => refreshState(true), 5000)
+setInterval(() => {
+  refreshState(true)
+  loadIterations()
+}, 5000)
 setInterval(() => {
   const cur = state.sessions.find((s) => s.sessionId === state.sessionId)
   if (cur && cur.running) loadTrace()
 }, 4000)
 
 refreshState(false)
+loadIterations(true)

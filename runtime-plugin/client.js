@@ -171,6 +171,12 @@ return {
 .dshmw-libscroll::-webkit-scrollbar{width:6px}
 .dshmw-libscroll::-webkit-scrollbar-thumb{background:var(--dsw-alias-border-l2,#d0d5dc);border-radius:3px}
 .dshmw-libscroll::-webkit-scrollbar-track{background:transparent}
+.dshmw-ctxmenu{position:fixed;z-index:9999;min-width:150px;padding:4px;box-sizing:border-box;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.14);display:flex;flex-direction:column;gap:1px}
+.dshmw-ctxitem{display:block;width:100%;text-align:left;border:none;background:transparent;border-radius:5px;padding:6px 10px;font-size:12px;font-family:inherit;color:var(--dsw-alias-label-primary);cursor:pointer}
+.dshmw-ctxitem:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
+.dshmw-ctxsep{height:1px;margin:2px 4px;background:var(--dsw-alias-border-l1)}
+.dshmw-toast{position:fixed;left:50%;bottom:32px;transform:translate(-50%,8px);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:10000;max-width:70vw;padding:7px 12px;border-radius:8px;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l2);box-shadow:0 4px 16px rgba(0,0,0,.14);font-size:12px;color:var(--dsw-alias-label-primary)}
+.dshmw-toast.show{opacity:1;transform:translate(-50%,0)}
 .dshmw-settings{border:1px solid var(--dsw-alias-border-l1);border-radius:8px;margin:0 4px;padding:8px;display:flex;flex-direction:column;gap:6px;box-sizing:border-box}
 .dshmw-settingslabel{font-size:11px;font-weight:600;color:var(--dsw-alias-label-secondary)}
 .dshmw-settingsrow{display:flex;gap:6px}
@@ -213,8 +219,9 @@ return {
       })
     }
     const listBatches = () => callHost('mock.list-batches')
-    const createBatch = (name) => callHost('mock.create-batch', { name })
+    const createBatch = (name, opts) => callHost('mock.create-batch', Object.assign({ name }, opts || {}))
     const archiveBatch = (path) => callHost('mock.archive-batch', { path })
+    const archiveSessionRun = (sessionId, batchPath) => callHost('mock.archive-session', { sessionId, batchPath })
     const deleteBatch = (path) => callHost('mock.delete-batch', { path })
     const getConfig = () => callHost('mock.get-config')
     const setConfig = (root) => callHost('mock.set-config', { root })
@@ -500,11 +507,15 @@ return {
         error ? React.createElement('div', { className: 'dshmw-error', role: 'alert' }, error) : null)
     }
 
-    // ---- 用例库：用例行（sourceRef + prompt 预览 + 标签；点击展开全文） ----
+    // ---- 用例库：用例行（sourceRef + prompt 预览 + 标签；点击展开全文，右键菜单） ----
     function LibCaseRow(props) {
       const c = props.c
+      const onMenu = props.onMenu
       const [open, setOpen] = React.useState(false)
-      return React.createElement('div', { className: 'dshmw-librow' },
+      return React.createElement('div', {
+        className: 'dshmw-librow',
+        onContextMenu: onMenu ? (e) => onMenu(c, e) : undefined,
+      },
         React.createElement('div', { className: 'dshmw-libhead' },
           React.createElement('span', { className: 'dshmw-libref', title: c.sourceRef }, c.sourceRef),
           c.language ? React.createElement('span', { className: 'dshmw-liblang' }, c.language) : null),
@@ -517,6 +528,179 @@ return {
           ? React.createElement('div', { className: 'dshmw-tags' },
               c.tags.slice(0, 4).map((t) => React.createElement('span', { key: t, className: 'dshmw-tag' }, t)))
           : null)
+    }
+
+    // ---- 用例右键菜单：发送 prompt 到聊天输入框 / 复制（DOM 注入官方 composer） ----
+    let ctxMenuEl = null
+    function closeCaseMenu() {
+      if (ctxMenuEl) { ctxMenuEl.remove(); ctxMenuEl = null }
+      window.removeEventListener('mousedown', onCtxMenuDocDown, true)
+      window.removeEventListener('contextmenu', onCtxMenuDocCtx, true)
+      window.removeEventListener('keydown', onCtxMenuDocKey, true)
+      window.removeEventListener('scroll', closeCaseMenu, true)
+    }
+    function onCtxMenuDocDown(e) {
+      if (ctxMenuEl && !ctxMenuEl.contains(e.target)) closeCaseMenu()
+    }
+    function onCtxMenuDocCtx() { closeCaseMenu() }
+    function onCtxMenuDocKey(e) { if (e.key === 'Escape') closeCaseMenu() }
+    function openCaseMenu(c, e) {
+      if (!c) return
+      e.preventDefault()
+      e.stopPropagation()
+      closeCaseMenu()
+      const menu = document.createElement('div')
+      menu.className = 'dshmw-ctxmenu'
+      const pad = 8
+      menu.style.left = Math.max(pad, Math.min(e.clientX, window.innerWidth - 170)) + 'px'
+      menu.style.top = Math.max(pad, Math.min(e.clientY, window.innerHeight - 110)) + 'px'
+      const itemRun = document.createElement('button')
+      itemRun.type = 'button'
+      itemRun.className = 'dshmw-ctxitem'
+      itemRun.textContent = '用该用例开跑'
+      itemRun.title = '新建批次 + 会话（meta 带用例 ID），prompt 预填进输入框'
+      itemRun.onclick = () => { closeCaseMenu(); startCaseRun(c) }
+      const itemSend = document.createElement('button')
+      itemSend.type = 'button'
+      itemSend.className = 'dshmw-ctxitem'
+      itemSend.textContent = '发送到聊天对话框'
+      itemSend.title = '把该用例的 prompt 填入当前聊天输入框'
+      itemSend.onclick = () => { closeCaseMenu(); sendCaseToChat(c) }
+      const itemCopy = document.createElement('button')
+      itemCopy.type = 'button'
+      itemCopy.className = 'dshmw-ctxitem'
+      itemCopy.textContent = '复制 prompt'
+      itemCopy.onclick = () => { closeCaseMenu(); copyCasePrompt(c, true) }
+      menu.appendChild(itemRun)
+      const sepRun = document.createElement('div')
+      sepRun.className = 'dshmw-ctxsep'
+      menu.appendChild(sepRun)
+      menu.appendChild(itemSend)
+      menu.appendChild(itemCopy)
+      document.body.appendChild(menu)
+      ctxMenuEl = menu
+      window.addEventListener('mousedown', onCtxMenuDocDown, true)
+      window.addEventListener('contextmenu', onCtxMenuDocCtx, true)
+      window.addEventListener('keydown', onCtxMenuDocKey, true)
+      window.addEventListener('scroll', closeCaseMenu, true)
+    }
+
+    // 找当前可见的聊天输入框：优先主对话区最底部的 textarea / contenteditable，
+    // 排除本插件面板自身的元素。
+    function findComposerInput() {
+      let best = null
+      let bestBottom = -1
+      const els = document.querySelectorAll('textarea, input[type="text"], [contenteditable]:not([contenteditable="false"])')
+      for (const el of els) {
+        if (!(el.offsetWidth || el.offsetHeight)) continue
+        if (el.closest('.dshmw-root')) continue
+        if (el.closest('[aria-hidden="true"]')) continue
+        if (el.disabled) continue
+        const r = el.getBoundingClientRect()
+        if (r.bottom > bestBottom) { bestBottom = r.bottom; best = el }
+      }
+      return best
+    }
+    // React 受控输入框用原生 setter + input 事件写入，触发组件状态更新。
+    function setInputText(el, text) {
+      if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+        const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype
+        const desc = Object.getOwnPropertyDescriptor(proto, 'value')
+        if (desc && desc.set) desc.set.call(el, text)
+        else el.value = text
+        el.dispatchEvent(new Event('input', { bubbles: true }))
+      } else {
+        el.textContent = text
+        el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }))
+      }
+      el.focus()
+      if (typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+    function sendCaseToChat(c) {
+      const prompt = c && typeof c.prompt === 'string' ? c.prompt : ''
+      if (!prompt) return
+      const el = findComposerInput()
+      if (!el) {
+        copyCasePrompt(c, true)
+        showCtxToast('未找到聊天输入框，已复制 prompt')
+        return
+      }
+      setInputText(el, prompt)
+      showCtxToast('已发送到聊天输入框')
+    }
+    function copyCasePrompt(c, notify) {
+      const prompt = c && typeof c.prompt === 'string' ? c.prompt : ''
+      if (!prompt) return
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        navigator.clipboard.writeText(prompt).then(
+          () => { if (notify) showCtxToast('已复制 prompt') },
+          () => { if (notify) showCtxToast('复制失败') })
+      } else {
+        const ta = document.createElement('textarea')
+        ta.value = prompt
+        ta.style.position = 'fixed'
+        ta.style.opacity = '0'
+        document.body.appendChild(ta)
+        ta.select()
+        try { document.execCommand('copy') } catch (err) { /* noop */ }
+        ta.remove()
+        if (notify) showCtxToast('已复制 prompt')
+      }
+    }
+    let ctxToastTimer = null
+    function showCtxToast(text) {
+      if (ctxToastTimer) { clearTimeout(ctxToastTimer); ctxToastTimer = null }
+      let t = document.getElementById('dshmw-ctx-toast')
+      if (!t) {
+        t = document.createElement('div')
+        t.id = 'dshmw-ctx-toast'
+        t.className = 'dshmw-toast'
+        document.body.appendChild(t)
+      }
+      t.textContent = text
+      t.classList.add('show')
+      ctxToastTimer = setTimeout(() => { t.classList.remove('show') }, 2200)
+    }
+    function disposeCtxUI() {
+      closeCaseMenu()
+      const t = document.getElementById('dshmw-ctx-toast')
+      if (t) t.remove()
+    }
+
+    // ---- 右键用例「用该用例开跑」：建批次(meta 带用例 ID) + 开会话 + prompt 预填 ----
+    function fnvHash(s) {
+      let h = 0x811c9dc5
+      for (let i = 0; i < s.length; i++) {
+        h ^= s.charCodeAt(i)
+        h = Math.imul(h, 0x01000193)
+      }
+      return (h >>> 0).toString(36)
+    }
+    // 会话打开后 composer 可能尚未挂载，最多重试几拍再放弃。
+    function fillComposerWith(text, tries) {
+      const el = findComposerInput()
+      if (el) { setInputText(el, text); return }
+      if ((tries || 0) < 6) setTimeout(() => fillComposerWith(text, (tries || 0) + 1), 600)
+    }
+    function startCaseRun(c) {
+      if (!c || !c.prompt) return
+      const name = (((c.setId || '') + ' · ' + (c.sourceRef || c.id || '用例')).replace(/^ · /, ''))
+      createBatch(name, {
+        caseId: c.id || '',
+        caseSetId: c.setId || '',
+        sourceRef: c.sourceRef || '',
+        promptHash: c.prompt ? fnvHash(c.prompt) : '',
+      })
+        .then((res) => {
+          const batchPath = res && typeof res.batchPath === 'string' ? res.batchPath : ''
+          if (batchPath === '') throw new Error('未返回批次目录')
+          return startBatchSession(batchPath)
+        })
+        .then(() => {
+          fillComposerWith(c.prompt, 0)
+          showCtxToast('已开跑：新建批次 + 会话，prompt 已填入输入框')
+        })
+        .catch((err) => showCtxToast('开跑失败：' + errorText(err)))
     }
 
     // ---- 用例库：导入表单（两步：解析 → 字段映射 + 样例预览 → 确认导入） ----
@@ -760,12 +944,13 @@ return {
               React.createElement('button', {
                 type: 'button',
                 className: 'dshmw-sessact',
-                title: '归档该会话（日志保留，可从归档恢复）',
+                title: '归档该会话（产物快照 + 会话记录 + 日志保留）',
                 onClick: (e) => {
                   e.stopPropagation()
-                  archiveSession(id)
-                    .then(() => props.onChanged())
-                    .catch((err) => console.warn(err))
+                  archiveSessionRun(id, batch.path)
+                    .then(() => archiveSession(id))
+                    .then(() => { showCtxToast('已归档（产物 + 会话记录）'); props.onChanged() })
+                    .catch((err) => { showCtxToast('归档失败：' + errorText(err)); console.warn(err) })
                 },
               }, React.createElement(SvgIcon, { d: ICONS.archive, size: 12 })))
           })) : null)
@@ -1061,7 +1246,7 @@ return {
             libTag !== '' ? '该标签下没有用例' : '该集为空'))
         } else {
           libBody.push(React.createElement('div', { key: 'scroll', className: 'dshmw-libscroll' },
-            libData.cases.map((c) => React.createElement(LibCaseRow, { key: c.id, c }))))
+            libData.cases.map((c) => React.createElement(LibCaseRow, { key: c.id, c, onMenu: openCaseMenu }))))
           libBody.push(React.createElement('div', { key: 'pager', className: 'dshmw-libpager' },
             React.createElement('button', {
               type: 'button',
@@ -1180,7 +1365,7 @@ return {
 
     // ---- registrations: 等 shell 声明槽位后纯增量注册 ----
     ctx.effect(() => {
-      const disposers = [disposeCss]
+      const disposers = [disposeCss, disposeCtxUI]
       disposers.push(slots.inject('sidebar.activity', () => slots.register(
         { name: 'sidebar.activity', id: PANEL_ID, order: ORDER, priority: -1, inject: () => ({ panelId: PANEL_ID }) },
         MockIcon,

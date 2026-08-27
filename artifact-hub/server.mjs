@@ -59,6 +59,10 @@ async function resolveMockRoot() {
 
 const MOCK_ROOT = await resolveMockRoot()
 const RUNS_DIR = path.join(MOCK_ROOT, 'runs')
+// 会话归档存储：<mock根>/case-library/archives/<batchId>/<ts>/（record.json + 快照）。
+// 由 dsh mock 插件归档会话时写入（Host 只写文件，不依赖 Hub 在线）；Hub 启动后
+// 扫描此处出「用例迭代」时间线。case-library 与用例库 DB 同根，语义一致。
+const ARCHIVES_DIR = path.join(MOCK_ROOT, 'case-library', 'archives')
 
 // ---------------------------------------------------------------- node/npm 解析
 // Hub 进程的 PATH 可能极简（如 launchd/裸 sh 环境没有 /usr/local/bin），
@@ -208,6 +212,48 @@ async function scanArtifactsCached(maxAgeMs = 3000) {
   const items = await scanArtifacts()
   scanCache = { at: Date.now(), items }
   return items
+}
+
+// ---------------------------------------------------------------- 用例迭代（会话归档时间线）
+
+/**
+ * 扫描归档目录 archives/<batchId>/<ts>/record.json，返回按时间倒序的归档条目。
+ * 条目 = 一次「归档会话」动作：产物快照 + 会话记录（含 caseId/日期）。
+ */
+async function scanArchives() {
+  const entries = []
+  let batchDirs = []
+  try { batchDirs = await fsp.readdir(ARCHIVES_DIR, { withFileTypes: true }) } catch (err) { return entries }
+  for (const be of batchDirs) {
+    if (!be.isDirectory()) continue
+    const batchDir = path.join(ARCHIVES_DIR, be.name)
+    let tsDirs = []
+    try { tsDirs = await fsp.readdir(batchDir, { withFileTypes: true }) } catch (err) { continue }
+    for (const te of tsDirs) {
+      if (!te.isDirectory()) continue
+      const rec = await readJson(path.join(batchDir, te.name, 'record.json'))
+      if (rec === null) continue
+      // 批次可能已删除：batchName 从 runs/ 补，缺失则退回 batchId
+      let batchName = typeof rec.batchName === 'string' && rec.batchName !== '' ? rec.batchName : ''
+      if (batchName === '') {
+        const meta = await readJson(path.join(RUNS_DIR, be.name, 'meta.json'))
+        batchName = (meta && typeof meta.name === 'string' && meta.name !== '') ? meta.name : be.name
+      }
+      entries.push({
+        archiveId: (typeof rec.archiveId === 'string' && rec.archiveId !== '') ? rec.archiveId : `${be.name}/${te.name}`,
+        batchId: be.name,
+        batchName,
+        sessionId: typeof rec.sessionId === 'string' ? rec.sessionId : '',
+        caseId: typeof rec.caseId === 'string' ? rec.caseId : '',
+        caseSetId: typeof rec.caseSetId === 'string' ? rec.caseSetId : '',
+        promptHash: typeof rec.promptHash === 'string' ? rec.promptHash : '',
+        archivedAt: typeof rec.archivedAt === 'string' ? rec.archivedAt : '',
+        artifacts: Array.isArray(rec.artifacts) ? rec.artifacts : [],
+      })
+    }
+  }
+  entries.sort((a, b) => (a.archivedAt < b.archivedAt ? 1 : a.archivedAt > b.archivedAt ? -1 : 0))
+  return entries
 }
 
 // ---------------------------------------------------------------- dsh apiproxy
@@ -1143,6 +1189,69 @@ async function servePreview(req, res, urlPath) {
   res.end(await fsp.readFile(filePath))
 }
 
+/** 伺服归档快照：/archive/<batchId>/<ts>/<snapshotDir>/<文件...>（路径越界校验同 /preview）。 */
+async function serveArchive(req, res, urlPath) {
+  const segments = urlPath.slice('/archive/'.length).split('/').filter((s) => s !== '')
+  const dec = (s) => { try { return decodeURIComponent(s) } catch (err) { return null } }
+  if (segments.length < 3) {
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
+    res.end('缺归档路径')
+    return
+  }
+  const batchId = dec(segments[0])
+  const ts = dec(segments[1])
+  const snapDir = dec(segments[2])
+  if (!batchId || !ts || !snapDir) {
+    res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
+    res.end('非法归档路径')
+    return
+  }
+  // 校验归档确实存在（防目录穿越：snapRoot 必须落在 ARCHIVES_DIR/<batchId>/<ts>）
+  const snapRoot = path.join(ARCHIVES_DIR, batchId, ts, snapDir)
+  if (!path.resolve(snapRoot).startsWith(path.resolve(path.join(ARCHIVES_DIR, batchId, ts)) + path.sep)) {
+    res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
+    res.end('越界路径')
+    return
+  }
+  const relParts = safeRelPath(segments.slice(3))
+  if (relParts === null) {
+    res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
+    res.end('非法路径')
+    return
+  }
+  let filePath = path.join(snapRoot, ...relParts)
+  let stat = await fsp.stat(filePath).catch(() => null)
+  if (stat && stat.isDirectory()) {
+    filePath = path.join(filePath, 'index.html')
+    stat = await fsp.stat(filePath).catch(() => null)
+  }
+  if (!stat || !stat.isFile()) {
+    const wantsHtml = String(req.headers.accept || '').includes('text/html') || relParts.length === 0
+    if (wantsHtml) {
+      filePath = path.join(snapRoot, 'index.html')
+      stat = await fsp.stat(filePath).catch(() => null)
+    }
+  }
+  if (!stat || !stat.isFile()) {
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
+    res.end('文件不存在')
+    return
+  }
+  if (!path.resolve(filePath).startsWith(path.resolve(snapRoot) + path.sep)
+    && path.resolve(filePath) !== path.resolve(path.join(snapRoot, 'index.html'))) {
+    res.writeHead(403)
+    res.end('越界路径')
+    return
+  }
+  const ext = path.extname(filePath).toLowerCase()
+  res.writeHead(200, {
+    'content-type': MIME[ext] || 'application/octet-stream',
+    'cache-control': 'no-cache',
+  })
+  if (req.method === 'HEAD') { res.end(); return }
+  res.end(await fsp.readFile(filePath))
+}
+
 // ---------------------------------------------------------------- 管理页静态资源
 
 async function servePublic(req, res, urlPath) {
@@ -1236,6 +1345,26 @@ const server = http.createServer(async (req, res) => {
       if (sessionId === '') { sendJson(res, 400, { ok: false, error: '缺 sessionId' }); return }
       const value = await trajectoryEvents(sessionId)
       sendJson(res, 200, { ok: true, value })
+      return
+    }
+    if (urlPath === '/api/iterations' && req.method === 'GET') {
+      const caseId = u.searchParams.get('caseId') || ''
+      const all = await scanArchives()
+      sendJson(res, 200, { ok: true, value: { entries: caseId ? all.filter((e) => e.caseId === caseId) : all } })
+      return
+    }
+    if (urlPath === '/api/iterations/fork' && req.method === 'POST') {
+      // 「继续对话」：分叉归档记录的会话 → 继承上下文 + cwd 的新会话，
+      // 在 dsh Mock 实验场批次下刷新可见并打开继续迭代。
+      const body = await readBody(req)
+      const sessionId = String(body.sessionId || '')
+      if (sessionId === '') { sendJson(res, 400, { ok: false, error: '缺 sessionId' }); return }
+      const value = await dshRpc('session.fork', { sessionId })
+      sendJson(res, 200, { ok: true, value: { sessionId: value && value.sessionId ? value.sessionId : '' } })
+      return
+    }
+    if (urlPath.startsWith('/archive/')) {
+      await serveArchive(req, res, urlPath)
       return
     }
     if (urlPath.startsWith('/preview/')) {

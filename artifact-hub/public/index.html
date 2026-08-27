@@ -71,6 +71,20 @@
     </section>
   </main>
 
+  <!-- 下：用例迭代（会话归档时间线，追踪用例效果变化） -->
+  <section id="iter-pane">
+    <div id="iter-toolbar">
+      <span class="trace-title">用例迭代 · 归档时间线</span>
+      <select id="iter-case-filter" title="按用例筛选"></select>
+      <div class="spacer"></div>
+      <span class="dim" id="iter-hint">归档会话时自动生成记录</span>
+      <button id="btn-iter-refresh" class="icon-btn" title="刷新迭代时间线">⟳</button>
+    </div>
+    <div id="iter-body">
+      <div class="empty dim">加载中…</div>
+    </div>
+  </section>
+
   <script src="/app.js"></script>
 </body>
 </html>

@@ -125,6 +125,30 @@ detached 拉起 `artifact-hub/server.mjs`（独立于 dsh 常驻，日志追加�
 传入（apiproxy 端口随 dsh 启动变化，server.mjs 默认值会过期）；启动后
 Host 轮询 `GET /api/state` 最长 10s 等待就绪。
 
+## 会话归档 → 用例迭代（追踪用例效果变化）
+
+批次会话行悬停的**「归档」按钮现在是三合一**：
+
+1. **产物归档**：扫批次目录产物（`dist/index.html` 优先，其次 `index.html`
+   静态根），快照复制到 `<mock 根>/case-library/archives/<batchId>/<时间戳>/`
+   （跳过 node_modules/.git；批次目录即使删除，归档快照仍在）
+2. **会话记录归档**：写 `record.json`（archiveId / batchId / sessionId /
+   caseId / caseSetId / promptHash / archivedAt / 产物清单）——**只写文件，
+   不依赖 Hub 在线**，Hub 启动后扫 archives/ 目录即出时间线
+3. **原有会话归档**：`workspace.archiveSession` 照旧（日志保留，可恢复）
+
+Hub 管理页新增**「用例迭代 · 归档时间线」**：按用例聚合归档记录，每条带
+日期 / 会话 ID / 产物快照，可 **[预览]** 归档快照、**[轨迹]** 看执行历史、
+**[继续对话]** 分叉该会话（`session.fork` 继承全部上下文 + cwd，新会话在
+Mock 实验场批次下刷新可见）——多轮调优 + 恢复现场的入口。
+
+**用例关联**：用例库右键菜单「用该用例开跑」→ 建批次时 `meta` 写入
+`caseId/caseSetId/sourceRef/promptHash`，并开会话 + prompt 预填输入框；
+这样归档记录按用例聚合，形成迭代链。普通新建批次照常归档，归入
+「未关联用例」。
+
+> 注意：Host 半边改动需**重启 dsh** 生效（client bundle 刷新页面即可）。
+
 ## 已知限制（MVP）
 
 - 批次下的会话数来自 `sessionQuery.listSessions()` 的 cwd 匹配，仅统计 live

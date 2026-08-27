@@ -118,6 +118,24 @@ POST /api/library/delete-set  { setId }
 管理入口：Mock 实验场侧边栏面板「用例库」卡片（集选择 + 标签筛选 + 两步
 导入表单：解析 → 字段映射 + 样例预览 → 确认导入）。
 
+## 用例迭代（会话归档时间线）
+
+会话归档（Mock 实验场批次会话行的「归档」按钮，Host 只写文件不依赖 Hub）
+落在 `<mock 根>/case-library/archives/<batchId>/<时间戳>/`：
+
+```
+archives/<batchId>/<ts>/
+├── record.json      ← { archiveId, batchId, batchName, sessionId, caseId,
+│                        caseSetId, promptHash, archivedAt, artifacts[] }
+├── <name>-dist/     ← React 构建产物快照（dist/ 复制）
+└── <name>-site/     ← 静态产物快照（index.html 根复制）
+```
+
+- `GET /api/iterations?caseId=` → 归档条目（时间倒序），管理页按用例聚合
+- `GET /archive/<batchId>/<ts>/<snapshotDir>/...` → 快照静态伺服（越界校验同 /preview）
+- `POST /api/iterations/fork { sessionId }` → 调 dsh apiproxy `session.fork`
+  分叉会话（继承上下文 + cwd），供「继续对话」恢复现场继续迭代
+
 ## 管理页布局
 
 ```

@@ -16,10 +16,10 @@
  * 元数据读写走 fs 服务，注册走 workspaceRegistry。所有目录操作限 mock 根内。
  */
 
-import { readFile } from 'node:fs/promises'
+import { readFile, cp as fscp, mkdir as fsmkdir, readdir as fsReaddir, writeFile as fswriteFile } from 'node:fs/promises'
 import { existsSync, openSync } from 'node:fs'
 import { spawn } from 'node:child_process'
-import { dirname } from 'node:path'
+import { dirname, basename, join as pathJoin, sep as pathSep } from 'node:path'
 
 export function apply(ctx) {
   const errorText = (err) => (err && err.message ? String(err.message) : String(err))
@@ -33,6 +33,10 @@ export function apply(ctx) {
   // 产物托管 Hub（artifact-hub/server.mjs）管理页地址；改端口需与
   // ARTIFACT_HUB_PORT 环境变量保持一致。
   const HUB_URL = 'http://127.0.0.1:4780/'
+
+  // 归档会话时跳过的重目录（node_modules 等，快照只保留可预览产物）。
+  const ARCHIVE_SKIP_DIRS = new Set(['node_modules', '.git', '.next', '.turbo', '.cache'])
+  const safeSnapName = (s) => String(s || 'dist').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'dist'
 
   // ---- 路径工具 ----
   function workspaceRootFallback() {
@@ -253,6 +257,11 @@ export function apply(ctx) {
               createdAt: Date.now(),
               status: 'active',
             }
+            // 可选：用例关联（右键用例「用该用例开跑」时写入，供归档时间线按用例聚合）
+            if (typeof args.caseId === 'string' && args.caseId !== '') meta.caseId = args.caseId
+            if (typeof args.caseSetId === 'string' && args.caseSetId !== '') meta.caseSetId = args.caseSetId
+            if (typeof args.sourceRef === 'string' && args.sourceRef !== '') meta.sourceRef = args.sourceRef
+            if (typeof args.promptHash === 'string' && args.promptHash !== '') meta.promptHash = args.promptHash
             await writeMeta(batchPath, meta)
 
             // 不注册 workspace：会话由后端 session.create({ cwd }) 创建，cwd 指向
@@ -310,6 +319,75 @@ export function apply(ctx) {
             meta.status = 'archived'
             await writeMeta(path, meta)
             return { ok: true, path, meta }
+          }
+          case 'archive-session': {
+            // 归档会话：产物快照 + 会话记录（供 Hub「用例迭代」时间线）。
+            const sessionId = typeof args.sessionId === 'string' ? args.sessionId : ''
+            const batchPath = typeof args.batchPath === 'string' ? args.batchPath : ''
+            if (sessionId === '' || batchPath === '') return { ok: false, error: '缺 sessionId / batchPath' }
+            if (!insideMockRoot(batchPath)) return { ok: false, error: '路径不在 mock 工作区内' }
+            const meta = await readMeta(batchPath)
+            if (meta === null) return { ok: false, error: '未找到批次元数据' }
+
+            const batchId = (meta && meta.batchId) || basename(batchPath)
+            const now = new Date()
+            const pad = (n, w) => String(n).padStart(w, '0')
+            const ts = pad(now.getFullYear(), 4) + pad(now.getMonth() + 1, 2) + pad(now.getDate(), 2)
+              + '-' + pad(now.getHours(), 2) + pad(now.getMinutes(), 2) + pad(now.getSeconds(), 2)
+            const archivesRoot = pathJoin(pathJoin(mockRoot(), 'case-library'), 'archives')
+            const archiveDir = pathJoin(pathJoin(archivesRoot, batchId), ts)
+            await fsmkdir(archiveDir, { recursive: true })
+
+            // 扫描产物根（与 Hub 检出规则一致：dist/index.html 优先，其次 index.html）。
+            const found = []
+            const walk = async (dir, depth) => {
+              if (depth > 3) return
+              let entries
+              try { entries = await fsReaddir(dir, { withFileTypes: true }) } catch (err) { return }
+              const files = new Set(entries.filter((e) => e.isFile()).map((e) => e.name))
+              const dirs = entries.filter((e) => e.isDirectory())
+              for (const d of dirs) {
+                if (d.name !== 'dist') continue
+                if (existsSync(pathJoin(dir, 'dist', 'index.html'))) {
+                  found.push({ name: basename(dir) || 'dist', kind: 'dist', root: pathJoin(dir, 'dist') })
+                  return
+                }
+              }
+              if (files.has('index.html')) {
+                found.push({ name: basename(dir) || 'site', kind: 'static', root: dir })
+                return
+              }
+              for (const d of dirs) {
+                if (ARCHIVE_SKIP_DIRS.has(d.name)) continue
+                await walk(pathJoin(dir, d.name), depth + 1)
+              }
+            }
+            await walk(batchPath, 0)
+
+            const snapshots = []
+            for (const a of found) {
+              const snapName = a.kind === 'dist' ? safeSnapName(a.name) + '-dist' : safeSnapName(a.name) + '-site'
+              const dest = pathJoin(archiveDir, snapName)
+              await fscp(a.root, dest, {
+                recursive: true,
+                filter: (src) => !src.split(pathSep).some((p) => ARCHIVE_SKIP_DIRS.has(p)),
+              })
+              snapshots.push({ name: a.name, kind: a.kind, snapshotDir: snapName })
+            }
+
+            const record = {
+              archiveId: batchId + '/' + ts,
+              batchId,
+              batchName: (meta && meta.name) || batchId,
+              sessionId,
+              caseId: (meta && meta.caseId) || '',
+              caseSetId: (meta && meta.caseSetId) || '',
+              promptHash: (meta && meta.promptHash) || '',
+              archivedAt: now.toISOString(),
+              artifacts: snapshots,
+            }
+            await fswriteFile(pathJoin(archiveDir, 'record.json'), JSON.stringify(record, null, 2), 'utf8')
+            return { ok: true, record }
           }
           case 'delete-batch': {
             const path = typeof args.path === 'string' ? args.path : ''
