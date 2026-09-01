@@ -112,18 +112,24 @@ API 由 artifact-hub 承载（SQLite：`<mock 根>/case-library/library.db`，�
 
 ## 产物托管入口（artifact-hub）
 
-面板头部新增**地球图标按钮**：打开产物托管页（artifact-hub，默认
-`http://127.0.0.1:4780/`）。按钮右侧状态点实时反映 Hub 在线状态（15s 轮询
-`GET /api/state`，Hub API 带 CORS `*` 头）；点击优先走 Host `/mock` 通道的
-`open-hub` 端点（macOS `open` → 系统默认浏览器），失败退回 `window.open`。
-Hub 的启动与产物发现规则见 `../artifact-hub/README.md`。
+面板「产物托管」卡片的**地球图标按钮**：打开**「用例结果」悬浮窗**（注册在
+`shell.overlay`，id `mock-cases`，order 20）——**任何界面可用**（新建会话页 /
+对话中都能打开），标题栏可拖动、右上角关闭。窗口内是**静态用例结果展示，
+只显示有归档结果的用例**：卡片列表由归档记录（`/api/iterations`）驱动、按
+最近归档时间倒序；每个用例一张卡片（原始信息：sourceRef / 用例集徽标 /
+标签 / prompt），点开卡片展开该用例的历史会话记录（归档时间线）——点
+「预览·xxx」在内置浏览器打开快照（复用同一预览 Tab，不多开），点「轨迹」
+在窗口内展开该会话的执行时间线。数据直连 Hub JSON API（用例库
+`/api/library/cases?ids=…` 按归档 id 取原始信息），**不加载 Hub 管理页前端、
+不弹独立窗口**。Hub 离线时窗口内显示「启动 Hub」按钮。
 
-「产物托管」卡片在 Hub 离线时提供**「启动」按钮**：走 `/mock` 通道的
+Hub 离线时该 Tab 显示「启动 Hub」按钮：走 `/mock` 通道的
 `start-hub` 端点，Host 以 `process.execPath` + `ELECTRON_RUN_AS_NODE=1`
 detached 拉起 `artifact-hub/server.mjs`（独立于 dsh 常驻，日志追加到
 `artifact-hub/hub.log`），并把面板页的 `location.origin` 作为 `DSH_API`
 传入（apiproxy 端口随 dsh 启动变化，server.mjs 默认值会过期）；启动后
-Host 轮询 `GET /api/state` 最长 10s 等待就绪。
+Host 轮询 `GET /api/state` 最长 10s 等待就绪。Hub 的启动与产物发现规则见
+`../artifact-hub/README.md`。
 
 ## 会话归档 → 用例迭代（追踪用例效果变化）
 

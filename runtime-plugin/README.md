@@ -48,11 +48,16 @@ dsh-mockworkspace/                       ← Mock 根（当前会话工作区）
 | `mock.archive-batch` | `{ path }` | 批次置为 archived |
 | `mock.delete-batch` | `{ path, workspaceId }` | 删注册 + rm -rf 目录（仅限 mock 根内） |
 | `mock.list-directory` | `{ path }` | 列目录（产物树） |
-| `mock.open-hub` | – | 打开产物托管页（artifact-hub，macOS `open`） |
+| `mock.open-hub` | – | 回退：打开产物托管页（artifact-hub，macOS `open`） |
 | `mock.start-hub` | `{ dshApi }` | nohup 后台拉起 artifact-hub/server.mjs（日志 `artifact-hub/hub.log`），`DSH_API` 取面板 `location.origin`，curl 轮询就绪 |
 
-面板头部另有**地球图标按钮**：打开 artifact-hub 管理页，右侧状态点实时显示
-Hub 在线状态（轮询 `http://127.0.0.1:4780/api/state`）。
+面板「产物托管」卡片另有**地球图标按钮**：打开**「用例结果」悬浮窗**
+（`shell.overlay`，id `mock-cases`，order 20，任何界面可用、标题栏可拖动）。
+窗口内是静态用例卡片视图，**只显示有归档结果的用例**（归档驱动、按最近归档
+倒序）：每用例一张卡片（sourceRef/用例集徽标/标签/prompt），点开展开历史会话
+记录（归档时间线）——「预览」在内置浏览器打开快照（复用同一预览 Tab），
+「轨迹」在窗口内展开执行时间线。数据直连 Hub JSON API（`/api/library/
+cases?ids=…` 按归档 id 取原始信息），不加载 Hub 管理页前端。
 
 面板另有「用例库」卡片：benchmark prompt 用例集导入（CSV/JSONL/JSON，两步
 字段映射表单）+ 标签筛选浏览，数据存 mock 根 `case-library/library.db`

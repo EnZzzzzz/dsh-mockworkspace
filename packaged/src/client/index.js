@@ -211,6 +211,61 @@ const CSS = `
 .dshmw-composerrow{display:flex;align-items:center;gap:8px}
 .dshmw-composerhint{flex:1;min-width:0;font-size:11px;color:var(--dsw-alias-label-secondary);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .dshmw-composerrow .dshmw-submit{flex:none}
+.dshmw-cases{box-sizing:border-box;flex:1;min-height:0;overflow:hidden;padding:12px 16px 20px;display:flex;flex-direction:column;gap:10px}
+.dshmw-casesoverlay{position:fixed;top:48px;left:50%;transform:translateX(-50%);z-index:1200;width:min(1000px,calc(100% - 96px));height:calc(100% - 96px);box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:var(--dsw-alias-bg-base);box-shadow:var(--dsw-shadow-lv2);display:flex;flex-direction:column;overflow:hidden;pointer-events:auto}
+.dshmw-casesoverlay-bar{flex:none;display:flex;align-items:center;gap:8px;height:38px;padding:0 10px 0 14px;box-sizing:border-box;border-bottom:1px solid var(--dsw-alias-border-l1);cursor:grab;user-select:none;color:var(--dsw-alias-label-primary)}
+.dshmw-casesoverlay-bar:active{cursor:grabbing}
+.dshmw-casesoverlay-title{flex:1;min-width:0;font-size:13px;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.dshmw-casesoverlay-body{flex:1;min-height:0;display:flex;flex-direction:column}
+.dshmw-caseshead{flex:none;display:flex;align-items:center;gap:8px;min-height:28px;flex-wrap:wrap}
+.dshmw-casestitle{flex:none;font-size:14px;font-weight:600;color:var(--dsw-alias-label-primary)}
+.dshmw-casesstatus{flex:none;font-size:11px;color:var(--dsw-alias-label-secondary)}
+.dshmw-casesfilter{flex:none;max-width:220px;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:12px;padding:3px 6px;font-family:inherit}
+.dshmw-casespag{flex:none;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dsw-alias-label-secondary)}
+.dshmw-cases-cols{flex:1;min-height:0;display:flex;flex-direction:row;gap:12px;overflow:hidden}
+.dshmw-cases-left{flex:none;width:300px;min-height:0;display:flex;flex-direction:column;gap:6px;overflow-y:auto;box-sizing:border-box}
+.dshmw-caseitem{flex:none;display:flex;flex-direction:column;gap:4px;width:100%;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l1);border-radius:9px;padding:8px 10px;background:transparent;cursor:pointer;color:var(--dsw-alias-label-primary);font-family:inherit;text-align:left}
+.dshmw-caseitem:hover{background:var(--dsw-alias-bg-layer-1)}
+.dshmw-caseitem.sel{border-color:var(--dsw-alias-state-business-primary);background:var(--dsw-alias-bg-layer-1)}
+.dshmw-caseitem-ref{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.dshmw-caseitem-badges{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.dshmw-caseitem-prompt{font-size:11px;line-height:16px;color:var(--dsw-alias-label-secondary);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap;overflow-wrap:break-word}
+.dshmw-cases-right{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;gap:8px;overflow-y:auto}
+.dshmw-case-detailhead{flex:none;display:flex;flex-direction:column;gap:6px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;padding:10px 12px;box-sizing:border-box;background:var(--dsw-alias-bg-layer-1)}
+.dshmw-case-detailtitle{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.dshmw-case-detailref{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary)}
+.dshmw-case-detailsec{flex:none;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-secondary)}
+.dshmw-casebadge{flex:none;border-radius:4px;padding:0 5px;font-size:10px;line-height:16px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary)}
+.dshmw-casetags{display:flex;flex-wrap:wrap;gap:4px}
+.dshmw-casetag{flex:none;border-radius:4px;padding:0 5px;font-size:10px;line-height:16px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);opacity:.85}
+.dshmw-caseprompt{font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary);cursor:pointer;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap;overflow-wrap:break-word;border-radius:6px;padding:2px}
+.dshmw-caseprompt:hover{background:var(--dsw-alias-bg-layer-2)}
+.dshmw-caseprompt.open{display:block;white-space:pre-wrap}
+.dshmw-casessec-count{font-size:11px;opacity:.7;font-weight:400}
+.dshmw-hit-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:5px 8px;box-sizing:border-box;font-size:12px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-bg-base);cursor:default}
+.dshmw-hit.clickable .dshmw-hit-row{cursor:pointer}
+.dshmw-hit.clickable .dshmw-hit-row:hover{border-color:var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1)}
+.dshmw-hit-date{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.dshmw-hit-batch{flex:none;max-width:180px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.dshmw-hit-sess{flex:none;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.dshmw-hit-links{flex:none;display:flex;align-items:center;gap:6px;margin-left:auto}
+.dshmw-iter-link{flex:none;border:none;background:transparent;padding:0;font-family:inherit;font-size:11px;color:var(--dsw-alias-state-business-primary);cursor:pointer}
+.dshmw-iter-link:hover{text-decoration:underline}
+.dshmw-hit{display:flex;flex-direction:column;gap:6px}
+.dshmw-hit-panel{border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:8px;box-sizing:border-box;background:var(--dsw-alias-bg-base)}
+.dshmw-traj{display:flex;flex-direction:column;gap:6px;max-height:440px;overflow-y:auto}
+.dshmw-traj-full{max-height:none;flex:1;min-height:0}
+.dshmw-trajbar{flex:none;display:flex;align-items:center;gap:8px;min-height:28px}
+.dshmw-trajtitle{flex:none;font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary)}
+.dshmw-cases-right-inner{flex:1;min-height:0;display:flex;flex-direction:column}
+.dshmw-traj-turn{font-size:11px;color:var(--dsw-alias-label-tertiary);padding:2px 0}
+.dshmw-traj-item{border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:6px 8px;box-sizing:border-box;font-size:12px;color:var(--dsw-alias-label-secondary)}
+.dshmw-traj-meta{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dsw-alias-label-tertiary)}
+.dshmw-traj-name{font-weight:600;color:var(--dsw-alias-label-primary)}
+.dshmw-traj-text{white-space:pre-wrap;overflow-wrap:break-word;font-size:12px;line-height:18px;margin-top:4px}
+.dshmw-traj-detail{white-space:pre-wrap;overflow-wrap:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:16px;margin-top:4px;color:var(--dsw-alias-label-secondary)}
+.dshmw-traj-details{font-size:11px;margin-top:4px;color:var(--dsw-alias-state-business-primary)}
+.dshmw-traj-toggle{border:none;background:transparent;padding:0;font-family:inherit;font-size:11px;color:var(--dsw-alias-state-business-primary);cursor:pointer;margin-top:4px}
 `
 
 // ---- host RPC（/mock loopback channel，消息形状同 createWebConnectionRpc） ----
@@ -298,6 +353,67 @@ const deleteLibSet = (setId) => hubApi('library/delete-set', {
   method: 'POST', headers: { 'content-type': 'application/json' },
   body: JSON.stringify({ setId }),
 })
+
+// ---- 会话头部 view ring（conversation.view）切换助手 ----
+// 活跃 view 存在 chat store 内部的 `view` 字段，无公开 setter；用模拟头部
+// Tab 点击切换（与 dsh-slide-bar 同一模式，官方头部 Tab 的 onClick 会调
+// actions.setView）。「内置浏览器」由 dsh-builtin-browser 提供。
+function activateViewByLabel(label) {
+  try {
+    const tabs = document.querySelectorAll('[role="tablist"] button[role="tab"]')
+    for (const b of tabs) {
+      if ((b.textContent || '').trim() === label) { b.click(); return true }
+    }
+  } catch (e) { /* ignore */ }
+  return false
+}
+// 在内置浏览器视图里打开 URL（面板内展示，不弹独立窗口）。复用同一个专用
+// 预览 Tab：tab 的 `current` 只在 surface 真正加载后才更新，按 URL 匹配不可靠
+// （排队中的导航不会更新 → 每次点击都会新建 Tab，越开越多）。这里维护一个
+// 稳定的 Tab id 优先复用，丢了再按 Hub URL 前缀找，都没有才新建。
+let browserPreviewTabId = null
+function openInBuiltinBrowser(url) {
+  const ctrl = typeof window !== 'undefined' ? window.__dshBrowser : undefined
+  if (!ctrl || typeof ctrl.command !== 'function') {
+    try { window.open(url, '_blank', 'noopener') } catch (e) { /* ignore */ }
+    return false
+  }
+  const done = () => { try { activateViewByLabel('内置浏览器') } catch (e) { /* ignore */ } }
+  ctrl.command({ op: 'tab-list' }).then((res) => {
+    const tabs = res && Array.isArray(res.tabs) ? res.tabs : []
+    let tab = tabs.find((t) => t.id === browserPreviewTabId)
+      || tabs.find((t) => typeof t.url === 'string' && t.url.startsWith(HUB_URL))
+    if (tab) {
+      browserPreviewTabId = tab.id
+      return ctrl.command({ op: 'tab-activate', id: tab.id }).then(() => ctrl.command({ op: 'navigate', url }))
+    }
+    return ctrl.command({ op: 'tab-new' }).then((r) => {
+      if (r && typeof r.id === 'number') browserPreviewTabId = r.id
+      return ctrl.command({ op: 'navigate', url })
+    })
+  }).then(() => done())
+    .catch(() => { try { window.open(url, '_blank', 'noopener') } catch (e) { /* ignore */ } })
+  return true
+}
+function fmtDateTime(iso) {
+  if (!iso) return ''
+  try { return new Date(iso).toLocaleString('zh-CN', { hour12: false }) } catch (e) { return String(iso) }
+}
+function fmtTime(iso) {
+  if (!iso) return ''
+  try {
+    const d = new Date(iso)
+    const pad = (n) => String(n).padStart(2, '0')
+    return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds())
+  } catch (e) { return '' }
+}
+// 产物可访问 URL：运行中取 runtime.url；静态产物走 Hub /preview/ 伺服。
+function artifactUrl(a) {
+  const rt = a.runtime || {}
+  if (rt.url) return rt.url
+  if (a.kind === 'static') return HUB_URL + 'preview/' + a.id.replace(/^\//, '') + '/'
+  return ''
+}
 
 // ---- mock 会话集合：conversation.composer 接管选择器的认领依据 ----
 // 只认本插件创建（或历史批次 cwd 关联）的会话；其他会话（包括其他
@@ -990,8 +1106,16 @@ function BatchRow(props) {
             onClick: (e) => {
               e.stopPropagation()
               archiveSessionRun(id, batch.path)
-                .then(() => archiveSessionById(id))
-                .then(() => { showCtxToast('已归档（产物 + 会话记录）'); props.onChanged() })
+                .then((res) => {
+                  const rec = res && res.record
+                  const hasSnap = rec && Array.isArray(rec.artifacts) && rec.artifacts.length > 0
+                  return archiveSessionById(id).then(() => {
+                    showCtxToast(hasSnap
+                      ? '已归档（产物 + 会话记录）'
+                      : '已归档（未发现可快照产物：dist/index.html 或根 index.html，产物生成后可再归档一次）')
+                    props.onChanged()
+                  })
+                })
                 .catch((err) => { showCtxToast('归档失败：' + errorText(err)); console.warn(err) })
             },
           }, React.createElement(SvgIcon, { d: ICONS.archive, size: 12 })))
@@ -1069,29 +1193,10 @@ function MockPanel(props) {
       .finally(() => setHubStarting(false))
   }, [hubStarting, pingHub])
 
-  const openHub = React.useCallback((selectId) => {
-    const url = selectId ? HUB_URL + '?select=' + encodeURIComponent(selectId) : HUB_URL
-    // 打开顺序：① 内置浏览器（dsh-builtin-browser 发布在 window.__dshBrowser
-    // 的页面控制器；已有 Hub 页签则激活并刷新到目标深链，否则新建页签）
-    // ② Host `open`（系统默认浏览器） ③ window.open。
-    const fallback = () => {
-      rpcCall('open-hub', selectId ? { select: selectId } : {}).catch(() => {
-        try { window.open(url, '_blank', 'noopener') } catch (err) { console.warn(err) }
-      })
-    }
-    const ctrl = typeof window !== 'undefined' ? window.__dshBrowser : undefined
-    if (!ctrl || typeof ctrl.command !== 'function') { fallback(); return }
-    const navigate = () => ctrl.command({ op: 'navigate', url })
-    ctrl.command({ op: 'tab-list' }).then((res) => {
-      const tabs = res && Array.isArray(res.tabs) ? res.tabs : []
-      const existing = tabs.find((t) => typeof t.url === 'string' && t.url.startsWith(HUB_URL))
-      if (existing) {
-        return ctrl.command({ op: 'tab-activate', id: existing.id }).then(navigate)
-      }
-      return ctrl.command({ op: 'tab-new' }).then(navigate)
-    }).then((res) => {
-      if (res && res.ok === false) throw new Error(res.error || 'navigate failed')
-    }).catch(fallback)
+  const openHub = React.useCallback(() => {
+    // 打开「用例结果」悬浮窗（shell.overlay）：任何界面可用（含新建会话页，
+    // 那里没有会话头部 Tab）。数据直连 Hub JSON API，不加载 Hub 管理页前端。
+    toggleCasesPanel()
   }, [])
 
   const load = React.useCallback(() => {
@@ -1365,7 +1470,10 @@ function MockPanel(props) {
             type: 'button',
             className: 'dshmw-art',
             title: a.id + (a.runtime && a.runtime.url ? '\n' + a.runtime.url : ''),
-            onClick: () => openHub(a.id),
+            onClick: () => {
+              const u = artifactUrl(a)
+              if (u) openInBuiltinBrowser(u)
+            },
           },
             React.createElement('span', { className: 'dshmw-dot ' + st }),
             React.createElement('span', { className: 'dshmw-artname' }, a.name || a.id),
@@ -1381,8 +1489,8 @@ function MockPanel(props) {
     actions: React.createElement('button', {
       type: 'button',
       className: 'dshmw-cardbtn',
-      title: hubOnline ? '在内置浏览器打开托管页（左预览 · 右轨迹）' : 'Hub 未启动 · 先运行 node artifact-hub/server.mjs',
-      onClick: () => openHub(null),
+      title: hubOnline ? '打开「用例结果」悬浮窗（任何界面可用，可拖动）' : 'Hub 未启动 · 先启动 Hub 再打开「用例结果」',
+      onClick: () => openHub(),
     },
       React.createElement(SvgIcon, { d: ICONS.globe, size: 11 }),
       '打开'),
@@ -1393,6 +1501,387 @@ function MockPanel(props) {
     libCard,
     hubCard,
     rootPath ? React.createElement('div', { className: 'dshmw-rootpath', title: rootPath }, '根: ' + rootPath) : null)
+}
+
+// ---- 「用例结果」视图（悬浮窗内容）：双栏布局 ----
+// 左栏：有归档结果的用例列表（垂直滚动，按最近归档倒序）；点用例 → 右栏
+// 展示该用例的归档历史（一条历史一行）；点某一条 → 在内置浏览器弹出那次归档
+// 的具体页面并收起悬浮窗。「轨迹」在右栏行内展开执行时间线。数据直连 Hub
+// JSON API（/api/iterations 驱动 + /api/library/cases?ids=… 取原始信息）。
+function CasesResultView(props) {
+  const [hub, setHub] = React.useState(null)             // null 探测中 | { online, batches }
+  const [sets, setSets] = React.useState([])             // 用例集（取名称用）
+  const [iterations, setIterations] = React.useState([])
+  const [archived, setArchived] = React.useState(null)   // null 未算 | { ids[], map<id,{count,latest,caseSetId}> }
+  const [caseIndex, setCaseIndex] = React.useState(null) // null 加载中 | Map<id, case>
+  const [selectedId, setSelectedId] = React.useState(null)
+  const [openPrompt, setOpenPrompt] = React.useState({}) // caseId → true（展开 prompt）
+  const [trajSessionId, setTrajSessionId] = React.useState(null) // 非空 → 右栏全屏展示该会话的轨迹
+  const [trajCache, setTrajCache] = React.useState({})    // sessionId → { status, entries?, error? }
+  const [openTool, setOpenTool] = React.useState({})      // `${sessionId}|${callId}` → true（工具参数/结果）
+  const [starting, setStarting] = React.useState(false)
+  const [startError, setStartError] = React.useState(null)
+
+  const refresh = React.useCallback(() => {
+    hubApi('state', { cache: 'no-store' })
+      .then((v) => setHub({ online: true, batches: Array.isArray(v.batches) ? v.batches : [] }))
+      .catch(() => setHub({ online: false, batches: [] }))
+    hubApi('iterations', { cache: 'no-store' })
+      .then((v) => setIterations(Array.isArray(v.entries) ? v.entries : []))
+      .catch(() => setIterations([]))
+  }, [])
+
+  React.useEffect(() => {
+    refresh()
+    const timer = setInterval(refresh, 5000)
+    return () => clearInterval(timer)
+  }, [refresh])
+
+  // 用例集名称（卡片 set 徽标用）；库为空时给出导入提示
+  React.useEffect(() => {
+    if (hub === null || hub.online !== true) { setSets([]); return }
+    hubApi('library/sets', { cache: 'no-store' })
+      .then((v) => setSets(Array.isArray(v.sets) ? v.sets : []))
+      .catch(() => setSets([]))
+  }, [hub])
+
+  // 归档 → 按 caseId 聚合（计数 + 最近归档时间），ids 按最近倒序
+  React.useEffect(() => {
+    const map = new Map()
+    for (const e of iterations) {
+      const id = e.caseId || ''
+      if (!id) continue
+      const cur = map.get(id)
+      if (!cur) map.set(id, { count: 1, latest: e.archivedAt || '', caseSetId: e.caseSetId || '' })
+      else {
+        cur.count += 1
+        if (e.archivedAt && e.archivedAt > cur.latest) cur.latest = e.archivedAt
+      }
+    }
+    const ids = [...map.keys()].sort((a, b) => {
+      const la = map.get(a).latest
+      const lb = map.get(b).latest
+      return la < lb ? 1 : la > lb ? -1 : 0
+    })
+    setArchived({ ids, map })
+  }, [iterations])
+
+  // 按归档 id 集从用例库拉取用例（仅 id 集合变化时重拉）
+  const archivedKey = archived ? archived.ids.join('\u0001') : ''
+  React.useEffect(() => {
+    if (hub === null || hub.online !== true || archived === null) { setCaseIndex(null); return }
+    if (archived.ids.length === 0) { setCaseIndex(new Map()); return }
+    let alive = true
+    const load = async () => {
+      const out = []
+      for (let i = 0; i < archived.ids.length; i += 200) {
+        const chunk = archived.ids.slice(i, i + 200)
+        try {
+          const v = await hubApi('library/cases?ids=' + chunk.map(encodeURIComponent).join(',') + '&limit=200', { cache: 'no-store' })
+          if (Array.isArray(v.cases)) out.push(...v.cases)
+        } catch (e) { /* 单批失败跳过 */ }
+      }
+      if (alive) setCaseIndex(new Map(out.map((c) => [c.id, c])))
+    }
+    load()
+    return () => { alive = false }
+  }, [hub, archivedKey])
+
+  const startHub = () => {
+    if (starting) return
+    setStarting(true)
+    setStartError(null)
+    rpcCall('start-hub', { dshApi: location.origin })
+      .then(() => { refresh(); setTimeout(refresh, 2000) })
+      .catch((err) => setStartError(errorText(err)))
+      .finally(() => setStarting(false))
+  }
+
+  const online = hub !== null && hub.online === true
+  const setNames = new Map(sets.map((s) => [s.id, s.name || s.id]))
+
+  // 用例列表：归档驱动，按最近倒序；库中缺失的归档计为孤儿
+  let orphanCount = 0
+  const cards = []
+  if (archived && caseIndex) {
+    for (const id of archived.ids) {
+      const c = caseIndex.get(id)
+      const a = archived.map.get(id)
+      if (!c) { orphanCount += a ? a.count : 0; continue }
+      cards.push({ case: c, count: a ? a.count : 0, latest: a ? a.latest : '', caseSetId: a ? a.caseSetId : '' })
+    }
+  }
+  const cardsKey = cards.map((c) => c.case.id).join('\u0001')
+  // 默认选中最近归档的用例
+  React.useEffect(() => {
+    if (cards.length === 0) { setSelectedId(null); return }
+    setSelectedId((cur) => (cards.some((c) => c.case.id === cur) ? cur : cards[0].case.id))
+  }, [cardsKey])
+
+  const selCard = cards.find((c) => c.case.id === selectedId) || cards[0] || null
+
+  // 归档按 caseId 聚合（时间倒序，供右栏历史记录）
+  const iterByCase = new Map()
+  for (const e of iterations) {
+    const key = e.caseId || ''
+    if (!iterByCase.has(key)) iterByCase.set(key, [])
+    iterByCase.get(key).push(e)
+  }
+
+  const togglePrompt = (id) => setOpenPrompt((o) => { const n = { ...o }; n[id] = !o[id]; return n })
+  const toggleTool = (key) => setOpenTool((o) => { const n = { ...o }; n[key] = !o[key]; return n })
+  // 打开轨迹：右栏全屏展示该会话的执行轨迹；未缓存则拉取。
+  const openTrajectory = (sessionId) => {
+    setTrajSessionId(sessionId)
+    if (trajCache[sessionId]) return
+    setTrajCache((c) => ({ ...c, [sessionId]: { status: 'loading' } }))
+    hubApi('trajectory/events?sessionId=' + encodeURIComponent(sessionId), { cache: 'no-store' })
+      .then((v) => setTrajCache((c) => ({ ...c, [sessionId]: { status: 'ok', entries: Array.isArray(v.entries) ? v.entries : [] } })))
+      .catch((err) => setTrajCache((c) => ({ ...c, [sessionId]: { status: 'err', error: errorText(err) } })))
+  }
+  // 打开快照：内置浏览器（复用同一预览 Tab）+ 收起悬浮窗
+  const openSnapshot = (url) => { setCasesPanelOpen(false); openInBuiltinBrowser(url) }
+
+  // 内联轨迹时间线（复用 Hub /api/trajectory/events 的简化条目）
+  const trajItem = (sessionId, e, idx) => {
+    const time = fmtTime(e.time)
+    switch (e.kind) {
+      case 'turn-start':
+        return React.createElement('div', { key: 't' + idx, className: 'dshmw-traj-turn' }, 'Turn ' + (e.turn ?? '?') + ' 开始')
+      case 'turn-end':
+        return React.createElement('div', { key: 't' + idx, className: 'dshmw-traj-turn' }, 'Turn ' + (e.turn ?? '?') + ' 结束' + (e.reason ? ' · ' + e.reason : ''))
+      case 'user':
+        return React.createElement('div', { key: 't' + idx, className: 'dshmw-traj-item' },
+          React.createElement('div', { className: 'dshmw-traj-meta' }, '👤 用户', React.createElement('span', null, time)),
+          React.createElement('div', { className: 'dshmw-traj-text' }, e.text || ''))
+      case 'assistant': {
+        const kids = [React.createElement('div', { key: 'm', className: 'dshmw-traj-meta' }, '🤖 Assistant', React.createElement('span', null, time))]
+        if (e.text) kids.push(React.createElement('div', { key: 't', className: 'dshmw-traj-text' }, e.text))
+        if (e.reasoning) kids.push(React.createElement('details', { key: 'r', className: 'dshmw-traj-details' },
+          React.createElement('summary', null, '思考过程'),
+          React.createElement('div', { className: 'dshmw-traj-detail' }, e.reasoning)))
+        return React.createElement('div', { key: 't' + idx, className: 'dshmw-traj-item' }, kids)
+      }
+      case 'tool': {
+        const dkey = sessionId + '|' + (e.callId || idx)
+        const open = openTool[dkey] === true
+        const stateText = e.done ? (e.resultError ? '✗ 失败' : '✓') : '…'
+        return React.createElement('div', { key: 't' + idx, className: 'dshmw-traj-item' },
+          React.createElement('div', { className: 'dshmw-traj-meta' },
+            React.createElement('span', { className: 'dshmw-traj-name' }, e.name || 'tool'),
+            e.title ? React.createElement('span', null, e.title) : null,
+            React.createElement('span', null, stateText),
+            React.createElement('span', null, time)),
+          React.createElement('button', { type: 'button', className: 'dshmw-traj-toggle', onClick: () => toggleTool(dkey) },
+            open ? '收起' : '参数 / 结果'),
+          open ? React.createElement('div', { className: 'dshmw-traj-detail' },
+            (e.args ? '参数：\n' + e.args + '\n' : '') + (e.resultText ? '结果：\n' + e.resultText : '')) : null)
+      }
+      default:
+        return null
+    }
+  }
+  const trajPanel = (sessionId) => {
+    const t = trajCache[sessionId]
+    if (!t || t.status === 'loading') return React.createElement('div', { className: 'dshmw-hint', style: { margin: 0 } }, '加载轨迹…')
+    if (t.status === 'err') return React.createElement('div', { className: 'dshmw-hint', style: { margin: 0 } }, '轨迹加载失败：' + t.error)
+    if (t.entries.length === 0) return React.createElement('div', { className: 'dshmw-hint', style: { margin: 0 } }, '会话暂无轨迹事件')
+    return React.createElement('div', { className: 'dshmw-traj dshmw-traj-full' }, t.entries.map((e, i) => trajItem(sessionId, e, i)))
+  }
+
+  // 左栏：用例列表
+  const leftItems = cards.map(({ case: c, count, latest, caseSetId }) => {
+    const sel = selCard !== null && c.id === selCard.case.id
+    const tags = Array.isArray(c.tags) ? c.tags : []
+    return React.createElement('button', {
+      key: c.id,
+      type: 'button',
+      className: 'dshmw-caseitem' + (sel ? ' sel' : ''),
+      title: c.prompt || '',
+      onClick: () => { setSelectedId(c.id); setTrajSessionId(null) },
+    },
+      React.createElement('span', { className: 'dshmw-caseitem-ref' }, c.sourceRef || c.id),
+      React.createElement('span', { className: 'dshmw-caseitem-badges' },
+        React.createElement('span', { className: 'dshmw-casebadge', title: caseSetId }, setNames.get(caseSetId) || caseSetId || '—'),
+        React.createElement('span', { className: 'dshmw-casebadge', title: latest ? '最近归档 ' + fmtDateTime(latest) : '' }, count + ' 次归档'),
+        tags.slice(0, 3).map((t) => React.createElement('span', { key: t, className: 'dshmw-casetag' }, t))),
+      React.createElement('span', { className: 'dshmw-caseitem-prompt' }, c.prompt || '（无 prompt）'))
+  })
+
+  // 右栏：选中用例的归档历史（一条一行；点行 → 内置浏览器弹开那次归档的具体页面）
+  let rightBody = null
+  if (trajSessionId && selCard) {
+    // 轨迹全屏视图 + 回退按钮（退回上一个层级：历史记录）
+    rightBody = [
+      React.createElement('div', { key: 'bar', className: 'dshmw-trajbar' },
+        React.createElement('button', {
+          type: 'button',
+          className: 'dshmw-iter-link',
+          title: '返回历史记录',
+          onClick: () => setTrajSessionId(null),
+        }, '← 返回'),
+        React.createElement('span', { className: 'dshmw-trajtitle' }, '执行轨迹'),
+        React.createElement('span', { className: 'dshmw-hint', style: { margin: 0 } }, '会话 ' + String(trajSessionId).slice(0, 12))),
+      React.createElement('div', { key: 'panel', className: 'dshmw-cases-right-inner' }, trajPanel(trajSessionId)),
+    ]
+  } else if (selCard) {
+    const c = selCard.case
+    const hits = iterByCase.get(c.id) || []
+    const tags = Array.isArray(c.tags) ? c.tags : []
+    const promptOpen = openPrompt[c.id] === true
+    const rows = hits.map((e) => {
+      const ts = String(e.archiveId || '').split('/')[1] || ''
+      const snaps = (e.artifacts || []).filter((a) => a.snapshotDir).map((a) => {
+        const url = HUB_URL + 'archive/' + encodeURIComponent(e.batchId) + '/' + encodeURIComponent(ts) + '/' + encodeURIComponent(a.snapshotDir) + '/'
+        return { url, label: a.name || a.snapshotDir }
+      })
+      return React.createElement('div', { key: e.archiveId || (e.batchId + '|' + e.sessionId), className: 'dshmw-hit' + (snaps.length > 0 ? ' clickable' : '') },
+        React.createElement('div', {
+          className: 'dshmw-hit-row',
+          title: snaps.length > 0 ? '打开该次归档的快照' : '该次归档无快照',
+          onClick: () => { if (snaps.length > 0) openSnapshot(snaps[0].url) },
+        },
+          React.createElement('span', { className: 'dshmw-hit-date', title: e.archivedAt || '' }, fmtDateTime(e.archivedAt)),
+          React.createElement('span', { className: 'dshmw-hit-batch', title: e.batchId }, e.batchName || e.batchId),
+          React.createElement('span', { className: 'dshmw-hit-sess', title: '会话 ' + e.sessionId }, String(e.sessionId || '').slice(0, 12)),
+          React.createElement('span', { className: 'dshmw-hit-links' },
+            snaps.length
+              ? snaps.map((s) => React.createElement('button', {
+                  key: s.label,
+                  type: 'button',
+                  className: 'dshmw-iter-link',
+                  title: s.url,
+                  onClick: (ev) => { ev.stopPropagation(); openSnapshot(s.url) },
+                }, '预览·' + s.label))
+              : React.createElement('span', { className: 'dshmw-hint', style: { margin: 0 } }, '无快照'),
+            React.createElement('button', {
+              type: 'button',
+              className: 'dshmw-iter-link',
+              title: '右栏全屏展示该会话的执行轨迹',
+              onClick: (ev) => { ev.stopPropagation(); openTrajectory(e.sessionId) },
+            }, '轨迹'))))
+    })
+    rightBody = [
+      React.createElement('div', { key: 'head', className: 'dshmw-case-detailhead' },
+        React.createElement('div', { className: 'dshmw-case-detailtitle' },
+          React.createElement('span', { className: 'dshmw-case-detailref', title: c.id }, c.sourceRef || c.id),
+          React.createElement('span', { className: 'dshmw-casebadge', title: selCard.caseSetId }, setNames.get(selCard.caseSetId) || selCard.caseSetId || '—'),
+          React.createElement('span', { className: 'dshmw-casebadge' }, selCard.count + ' 次归档')),
+        tags.length > 0
+          ? React.createElement('div', { className: 'dshmw-casetags' },
+              tags.map((t) => React.createElement('span', { key: t, className: 'dshmw-casetag' }, t)))
+          : null,
+        React.createElement('div', {
+          className: 'dshmw-caseprompt' + (promptOpen ? ' open' : ''),
+          title: promptOpen ? '收起' : '展开 prompt 全文',
+          onClick: () => togglePrompt(c.id),
+        }, c.prompt || '（无 prompt）')),
+      React.createElement('div', { key: 'sec', className: 'dshmw-case-detailsec' }, '历史会话记录',
+        React.createElement('span', { className: 'dshmw-casessec-count' }, '· ' + hits.length + ' 条')),
+      ...(rows.length > 0 ? rows : [React.createElement('div', { key: 'empty', className: 'dshmw-hint', style: { margin: 0 } }, '该用例暂无归档记录。')])]
+  }
+
+  const archivedCount = archived ? archived.ids.length : 0
+  const loadingCases = archived !== null && archived.ids.length > 0 && caseIndex === null
+
+  return React.createElement('div', { className: 'dshmw-cases' },
+    React.createElement('div', { className: 'dshmw-caseshead' },
+      React.createElement('span', { className: 'dshmw-hubdot' + (online ? ' online' : '') }),
+      React.createElement('span', { className: 'dshmw-casestitle' }, '用例结果'),
+      React.createElement('span', { className: 'dshmw-casesstatus' }, hub === null ? '探测中' : online ? 'Hub 在线' : 'Hub 未启动'),
+      React.createElement('span', { className: 'dshmw-casespag', style: { marginLeft: 'auto' } },
+        archivedCount > 0 ? '有归档结果：' + cards.length + ' 个用例' : ''),
+      !online && hub !== null
+        ? React.createElement('button', {
+            type: 'button', className: 'dshmw-cardbtn', disabled: starting,
+            title: '拉起 artifact-hub/server.mjs（后台进程，独立于 dsh 常驻）',
+            onClick: startHub,
+          }, starting ? '启动中…' : '启动 Hub')
+        : React.createElement('button', {
+            type: 'button', className: 'dshmw-cardbtn', title: '刷新', onClick: refresh,
+          }, '刷新'),
+    ),
+    startError !== null ? React.createElement('div', { className: 'dshmw-error' }, '启动失败：' + startError) : null,
+    !online && hub !== null
+      ? React.createElement('div', { className: 'dshmw-hint', style: { marginTop: 0 } },
+          '产物托管 Hub 未启动，用例结果不可用。点「启动 Hub」一键拉起，或手动：node artifact-hub/server.mjs（日志 artifact-hub/hub.log）。')
+      : null,
+    online && sets.length === 0 && archivedCount === 0
+      ? React.createElement('div', { className: 'dshmw-hint', style: { marginTop: 0 } },
+          '还没有用例集。到 Mock 实验场「用例库」卡片点「导入」，把 benchmark 数据集（CSV / JSONL / JSON）归一化为 prompt 用例集。')
+      : null,
+    online && archived !== null && archivedCount === 0
+      ? React.createElement('div', { className: 'dshmw-hint', style: { marginTop: 0 } },
+          '还没有归档结果。在 dsh Mock 实验场的批次会话上点「归档」按钮（产物快照 + 会话记录，含用例 ID / 日期），归档后这里会出现对应用例卡片。')
+      : null,
+    online && loadingCases
+      ? React.createElement('div', { className: 'dshmw-hint', style: { marginTop: 0 } }, '加载用例…')
+      : null,
+    online && archived !== null && caseIndex !== null && cards.length === 0 && archivedCount > 0
+      ? React.createElement('div', { className: 'dshmw-hint', style: { marginTop: 0 } },
+          orphanCount > 0
+            ? '归档记录未匹配到用例库用例（' + orphanCount + ' 条，对应用例可能已从用例集删除）。'
+            : '没有可显示的归档用例。')
+      : null,
+    online && cards.length > 0
+      ? React.createElement('div', { key: 'cols', className: 'dshmw-cases-cols' },
+          React.createElement('div', { className: 'dshmw-cases-left' }, leftItems),
+          React.createElement('div', { className: 'dshmw-cases-right' }, rightBody))
+      : null,
+    online && cards.length > 0 && orphanCount > 0
+      ? React.createElement('div', { className: 'dshmw-hint', style: { marginTop: 0 } },
+          '另有 ' + orphanCount + ' 条归档记录未匹配用例库（对应用例可能已删除）。')
+      : null)
+}
+
+// ---- 「用例结果」悬浮窗（shell.overlay，任何界面可用，含新建会话页） ----
+let casesPanelOpen = false
+const casesPanelListeners = new Set()
+function setCasesPanelOpen(open) {
+  casesPanelOpen = !!open
+  for (const l of casesPanelListeners) { try { l() } catch (e) { /* ignore */ } }
+}
+function toggleCasesPanel() { setCasesPanelOpen(!casesPanelOpen) }
+
+function CasesOverlayPanel(props) {
+  const [open, setOpen] = React.useState(casesPanelOpen)
+  const panelRef = React.useRef(null)
+  const dragRef = React.useRef({ x: 0, y: 0, offX: 0, offY: 0 })
+  React.useEffect(() => {
+    const l = () => setOpen(casesPanelOpen)
+    casesPanelListeners.add(l)
+    return () => casesPanelListeners.delete(l)
+  }, [])
+  if (!open) return null
+  // 标题栏拖动移动悬浮窗（直接改 style，不触发重渲染）
+  const onBarDown = (e) => {
+    const el = panelRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    dragRef.current = { x: e.clientX, y: e.clientY, offX: r.left, offY: r.top }
+    const onMove = (ev) => {
+      el.style.left = (dragRef.current.offX + ev.clientX - dragRef.current.x) + 'px'
+      el.style.top = (dragRef.current.offY + ev.clientY - dragRef.current.y) + 'px'
+      el.style.transform = 'none'
+    }
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+  return React.createElement('div', { ref: panelRef, className: 'dshmw-casesoverlay', role: 'dialog', 'aria-label': '用例结果' },
+    React.createElement('div', { className: 'dshmw-casesoverlay-bar', onMouseDown: onBarDown, title: '拖动移动位置' },
+      React.createElement('span', { className: 'dshmw-casesoverlay-title' }, '用例结果'),
+      React.createElement('button', {
+        type: 'button',
+        className: 'dshmw-cardbtn',
+        title: '关闭',
+        onClick: () => setCasesPanelOpen(false),
+      }, '✕')),
+    React.createElement('div', { className: 'dshmw-casesoverlay-body' },
+      React.createElement(CasesResultView, null)))
 }
 
 // ---- apply（模块级；React 由 build.mjs 闭包工厂绑定） ----
@@ -1435,6 +1924,12 @@ async function apply(ctx) {
     disposers.push(slots.inject('sidebar.panel', () => slots.register(
       { name: 'sidebar.panel', id: PANEL_ID, order: ORDER, priority: -1, inject: () => ({ panelId: PANEL_ID }) },
       MockPanel,
+    )))
+    // 「用例结果」悬浮窗：shell.overlay（任何界面可用，含新建会话页——
+    // 那里没有会话头部 Tab）。关闭时组件返回 null，不遮挡界面。
+    disposers.push(slots.inject('shell.overlay', () => slots.register(
+      { name: 'shell.overlay', id: 'mock-cases', order: 20, label: () => '用例结果' },
+      CasesOverlayPanel,
     )))
     // 系统设置对话框「通用」页里的「Mock 根目录」行（原侧边栏 gear 按钮的设置项挪到这里）。
     // order 20 排在 language(0) / appearance(10) 之后。

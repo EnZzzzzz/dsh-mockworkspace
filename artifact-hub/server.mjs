@@ -845,14 +845,24 @@ async function apiLibrary(req, res, u) {
   }
   // 用例查询：tag / q（prompt、sourceRef 子串）筛选 + 分页
   if (urlPath === '/api/library/cases' && req.method === 'GET') {
-    const setRow = libResolveSet(db, u.searchParams.get('setId') || '')
-    if (setRow === null) { sendJson(res, 404, { ok: false, error: '用例集不存在' }); return true }
+    const setParam = (u.searchParams.get('setId') || '').trim()
+    const setRow = setParam !== '' ? libResolveSet(db, setParam) : null
+    if (setParam !== '' && setRow === null) { sendJson(res, 404, { ok: false, error: '用例集不存在' }); return true }
     const tag = (u.searchParams.get('tag') || '').trim()
     const q = (u.searchParams.get('q') || '').trim().toLowerCase()
+    const idsRaw = (u.searchParams.get('ids') || '').trim()
     const offset = Math.max(0, Number(u.searchParams.get('offset')) || 0)
     const limit = Math.min(200, Math.max(1, Number(u.searchParams.get('limit')) || 50))
-    const where = ['set_id = ?']
-    const params = [setRow.id]
+    const where = []
+    const params = []
+    if (setRow !== null) { where.push('set_id = ?'); params.push(setRow.id) }
+    if (idsRaw !== '') {
+      const ids = idsRaw.split(',').map((s) => s.trim()).filter((s) => s !== '')
+      if (ids.length > 0) {
+        where.push('cases.id IN (' + ids.map(() => '?').join(',') + ')')
+        for (const id of ids) params.push(id)
+      }
+    }
     if (tag !== '') {
       where.push('EXISTS (SELECT 1 FROM case_tags t WHERE t.set_id = cases.set_id AND t.case_id = cases.id AND t.tag = ?)')
       params.push(tag)
@@ -861,13 +871,13 @@ async function apiLibrary(req, res, u) {
       where.push('(instr(lower(prompt), ?) > 0 OR instr(lower(source_ref), ?) > 0)')
       params.push(q, q)
     }
-    const cond = where.join(' AND ')
-    const total = db.prepare('SELECT COUNT(*) AS n FROM cases WHERE ' + cond).get(...params).n
-    const rows = db.prepare('SELECT * FROM cases WHERE ' + cond + ' ORDER BY created_at, source_ref LIMIT ? OFFSET ?')
+    const cond = where.length > 0 ? ' WHERE ' + where.join(' AND ') : ''
+    const total = db.prepare('SELECT COUNT(*) AS n FROM cases' + cond).get(...params).n
+    const rows = db.prepare('SELECT * FROM cases' + cond + ' ORDER BY created_at, source_ref LIMIT ? OFFSET ?')
       .all(...params, limit, offset)
     sendJson(res, 200, {
       ok: true,
-      value: { total, offset, limit, cases: rows.map(libCaseView), set: libSetView(db, setRow) },
+      value: { total, offset, limit, cases: rows.map(libCaseView), set: setRow ? libSetView(db, setRow) : null },
     })
     return true
   }

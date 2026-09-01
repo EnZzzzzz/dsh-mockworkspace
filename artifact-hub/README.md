@@ -101,7 +101,7 @@ Case 规范形态（导入时归一化）：
 GET  /api/library/sets
 POST /api/library/preview     { path|content, fileName?, format? } → 列名+样例行+猜测映射（不写盘）
 POST /api/library/import      { path|content, name?, setId?, mapping{ promptColumn, refColumn?, languageColumn?, tagColumns?[] } }
-GET  /api/library/cases?setId=&tag=&q=&offset=&limit=   （limit ≤ 200）
+GET  /api/library/cases?setId=&tag=&q=&ids=&offset=&limit=   （limit ≤ 200；`ids` 为逗号分隔的用例 id 过滤，可省略 setId）
 POST /api/library/delete-set  { setId }
 ```
 
