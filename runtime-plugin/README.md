@@ -46,6 +46,7 @@ dsh-mockworkspace/                       ← Mock 根（当前会话工作区）
  `mock.create-batch` | `{ name }` | 建目录 + meta.json + 注册 workspace 
 | `mock.list-batches` | – | 列出全部批次（含 meta、workspaceId、sessionIds） |
 | `mock.archive-batch` | `{ path }` | 批次置为 archived |
+| `mock.archive-session` | `{ sessionId, batchPath }` | 扫产物快照 + 写 record.json；扫描无果时自动找含 `scripts.build` 的前端项目 install + build 后重扫（诊断记入 record.json `builds`，失败不阻断） |
 | `mock.delete-batch` | `{ path, workspaceId }` | 删注册 + rm -rf 目录（仅限 mock 根内） |
 | `mock.list-directory` | `{ path }` | 列目录（产物树） |
 | `mock.open-hub` | – | 回退：打开产物托管页（artifact-hub，macOS `open`） |

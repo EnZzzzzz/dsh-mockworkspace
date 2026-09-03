@@ -135,9 +135,14 @@ Host 轮询 `GET /api/state` 最长 10s 等待就绪。Hub 的启动与产物发
 
 批次会话行悬停的**「归档」按钮现在是三合一**：
 
-1. **产物归档**：扫批次目录 HTML 产物（优先 `index.html`，否则取字典序首个 `.html`
-   静态根），快照复制到 `<mock 根>/case-library/archives/<batchId>/<时间戳>/`
-   （跳过 node_modules/.git；批次目录即使删除，归档快照仍在）
+1. **产物归档**：扫批次目录 HTML 产物（构建产物目录认 `dist/`（Vite 等）与
+   `out/`（Next.js `output:'export'`），入口优先 `index.html`，否则取字典序首个
+   `.html` 静态根），快照复制到 `<mock 根>/case-library/archives/<batchId>/<时间戳>/`
+   （跳过 node_modules/.git；批次目录即使删除，归档快照仍在）。
+   **扫描无果时自动构建**：找含 `scripts.build` 的前端项目根（lockfile 判定
+   pnpm/npm/yarn，缺 node_modules 先 install），跑 `<pm> run build` 后重扫；
+   构建诊断（每步命令 + 输出尾部）记入 `record.json` 的 `builds` 字段，
+   构建失败不阻断归档（仍落 record，artifacts 为空）
 2. **会话记录归档**：写 `record.json`（archiveId / batchId / sessionId /
    caseId / caseSetId / promptHash / archivedAt / 产物清单）——**只写文件，
    不依赖 Hub 在线**，Hub 启动后扫 archives/ 目录即出时间线

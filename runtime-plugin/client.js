@@ -49,6 +49,33 @@ return {
         'aria-hidden': true,
       }, React.createElement('path', { d: props.d }))
     }
+
+    // 产物缩略图：运行中渲染活页面 iframe；未运行优先 Hub 截图（静态 PNG，
+    // 加载失败退回快照 iframe）；再退回占位图标。
+    function ArtThumb(props) {
+      const [imgFailed, setImgFailed] = React.useState(false)
+      if (!props.live && props.thumbUrl !== '' && !imgFailed) {
+        return React.createElement('img', {
+          className: 'dshmw-artimg',
+          src: props.thumbUrl,
+          alt: '',
+          loading: 'lazy',
+          onError: () => setImgFailed(true),
+        })
+      }
+      if (props.url !== '') {
+        return React.createElement('iframe', {
+          className: 'dshmw-artframe',
+          src: props.url,
+          loading: 'lazy',
+          scrolling: 'no',
+          tabIndex: -1,
+          'aria-hidden': true,
+        })
+      }
+      return React.createElement('span', { className: 'dshmw-artplaceholder' },
+        React.createElement(SvgIcon, { d: ICONS.globe, size: 18 }))
+    }
     const ICONS = {
       beaker: 'M8 2.5 C6 4 5 6 5 9 V11.5 A1.5 1.5 0 0 0 6.5 13 H9.5 A1.5 1.5 0 0 0 11 11.5 V9 C11 6 10 4 8 2.5 Z M6.5 8.5 H9.5',
       plus: 'M8 3 V13 M3 8 H13',
@@ -143,9 +170,19 @@ return {
 .dshmw-hubdot.online{background:var(--dsw-alias-state-success-primary);box-shadow:0 0 4px rgba(63,185,105,.7)}
 .dshmw-hubdot.offline{background:var(--dsw-alias-state-error-primary);box-shadow:0 0 4px rgba(240,84,84,.6)}
 .dshmw-hubdot.starting{background:#d9a13b;animation:dshmw-pulse 1.1s infinite}
-.dshmw-artgrouplabel{padding:3px 6px 1px;font-size:11px;color:var(--dsw-alias-label-secondary);opacity:.7;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-.dshmw-art{display:flex;align-items:center;gap:7px;width:100%;min-height:26px;padding:0 6px;box-sizing:border-box;border:none;border-radius:6px;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:12px;text-align:left}
-.dshmw-art:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
+.dshmw-artgroup{display:flex;align-items:center;gap:4px;width:100%;box-sizing:border-box;padding:3px 6px 1px;border:none;background:transparent;cursor:pointer;font-family:inherit;font-size:11px;color:var(--dsw-alias-label-secondary);opacity:.75;text-align:left}
+.dshmw-artgroup:hover{opacity:1;color:var(--dsw-alias-label-primary)}
+.dshmw-artgroup .dshmw-chev{flex:none;display:inline-flex;transition:transform .15s ease}
+.dshmw-artgroup-closed .dshmw-chev{transform:rotate(-90deg)}
+.dshmw-artgrouptitle{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.dshmw-artgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:2px 6px 6px}
+.dshmw-artcard{display:flex;flex-direction:column;min-width:0;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;overflow:hidden;background:transparent;cursor:pointer;padding:0;text-align:left;color:var(--dsw-alias-label-secondary);font-family:inherit}
+.dshmw-artcard:hover{border-color:var(--dsw-alias-border-l2);color:var(--dsw-alias-label-primary)}
+.dshmw-artthumb{position:relative;width:100%;aspect-ratio:4/3;background:var(--dsw-alias-bg-layer-1);overflow:hidden}
+.dshmw-artframe{position:absolute;top:0;left:0;width:500%;height:500%;border:none;transform:scale(.2);transform-origin:0 0;pointer-events:none;background:#fff}
+.dshmw-artimg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top center;border:0;display:block;background:#fff}
+.dshmw-artplaceholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary,#8a919d);opacity:.6}
+.dshmw-artmeta{display:flex;align-items:center;gap:6px;padding:4px 6px;min-width:0;font-size:11px}
 .dshmw-artname{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .dshmw-kind{flex:none;border-radius:4px;padding:0 5px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .dshmw-dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-label-tertiary,#9aa0a6)}
@@ -389,11 +426,13 @@ return {
         return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds())
       } catch (e) { return '' }
     }
-    // 产物可访问 URL：运行中取 runtime.url；静态产物走 Hub /preview/ 伺服。
+    // 产物可访问 URL：运行中取 runtime.url；静态产物走 Hub /preview/ 伺服；
+    // node 类产物未运行时回退到该批次最新归档快照（Hub /api/state 带 archiveUrl）。
     function artifactUrl(a) {
       const rt = a.runtime || {}
       if (rt.url) return rt.url
       if (a.kind === 'static') return HUB_URL + 'preview/' + a.id.replace(/^\//, '') + '/'
+      if (typeof a.archiveUrl === 'string' && a.archiveUrl !== '') return HUB_URL + a.archiveUrl.replace(/^\//, '')
       return ''
     }
 
@@ -1496,6 +1535,36 @@ return {
       // ---- 卡片① 产物托管（artifact-hub 产物清单，点击直达） ----
       // 服务状态收敛到面板头部的「后台服务」状态灯，卡片内只保留产物内容。
       const hubBody = []
+      const [collapsedArts, setCollapsedArts] = React.useState({})
+      // 产物点击的本地态：artPending 启动中（防重复点击），artError 启动失败原因。
+      const [artPending, setArtPending] = React.useState({})
+      const [artError, setArtError] = React.useState({})
+      // 点产物卡片：有 URL 直接打开；无 URL（未运行的 dev 产物）交给 Hub 启动
+      // （install + dev server，Hub 同步等就绪），拿到 runtime.url 后打开。
+      const openArtifact = (a) => {
+        const direct = artifactUrl(a)
+        if (direct) { openInBuiltinBrowser(direct); return }
+        if (artPending[a.id]) return
+        setArtPending((prev) => ({ ...prev, [a.id]: true }))
+        setArtError((prev) => ({ ...prev, [a.id]: null }))
+        fetch(HUB_URL + 'api/artifacts/start', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ id: a.id }),
+        })
+          .then((res) => (res.ok ? res.json() : Promise.reject(new Error('HTTP ' + res.status))))
+          .then((msg) => {
+            const v = msg && msg.value
+            if (msg && msg.ok === true && v && v.url) {
+              openInBuiltinBrowser(v.url)
+              pingHub()
+            } else {
+              setArtError((prev) => ({ ...prev, [a.id]: (v && v.error) || '启动失败' }))
+            }
+          })
+          .catch((err) => setArtError((prev) => ({ ...prev, [a.id]: err && err.message ? String(err.message) : String(err) })))
+          .finally(() => setArtPending((prev) => ({ ...prev, [a.id]: false })))
+      }
       if (!hubOnline) {
         hubBody.push(React.createElement('div', { key: 'hint', className: 'dshmw-hint', style: { padding: '2px 6px 6px', marginTop: 0 } },
           hubStartError !== null
@@ -1508,27 +1577,67 @@ return {
           hubBody.push(React.createElement('div', { key: 'none', className: 'dshmw-hint', style: { padding: '0 6px 6px', marginTop: 0 } },
             'runs/ 下未扫描到产物（index.html / package.json / artifact.json）'))
         } else {
+          // 相同用例的产物合并成一组：按批次 meta 的 caseSetId+sourceRef/caseId
+          // （缺失退回批次名）归并；组标题可点击折叠/展开。
+          const artGroups = []
+          const artGroupIndex = new Map()
           hubBatches.forEach((b) => {
             const arts = b.artifacts || []
             if (arts.length === 0) return
-            hubBody.push(React.createElement('div', { key: 'g-' + b.batchId, className: 'dshmw-artgrouplabel', title: b.batchId },
-              (b.name || b.batchId) + ' · ' + arts.length + ' 产物'))
-            arts.forEach((a) => {
-              const st = a.runtime && typeof a.runtime.status === 'string' ? a.runtime.status : 'stopped'
-              hubBody.push(React.createElement('button', {
-                key: a.id,
-                type: 'button',
-                className: 'dshmw-art',
-                title: a.id + (a.runtime && a.runtime.url ? '\n' + a.runtime.url : ''),
-                onClick: () => {
-                  const u = artifactUrl(a)
-                  if (u) openInBuiltinBrowser(u)
+            const m = (arts[0] && arts[0].meta) || {}
+            const key = (m.caseSetId || m.caseId)
+              ? String(m.caseSetId || '') + '·' + String(m.sourceRef || m.caseId)
+              : String(b.name || b.batchId)
+            let g = artGroupIndex.get(key)
+            if (!g) {
+              g = { key, name: b.name || b.batchId, arts: [] }
+              artGroupIndex.set(key, g)
+              artGroups.push(g)
+            }
+            arts.forEach((a) => g.arts.push(a))
+          })
+          artGroups.forEach((g) => {
+            const closed = collapsedArts[g.key] === true
+            hubBody.push(React.createElement('button', {
+              key: 'g-' + g.key,
+              type: 'button',
+              className: 'dshmw-artgroup' + (closed ? ' dshmw-artgroup-closed' : ''),
+              title: g.name,
+              onClick: () => setCollapsedArts((prev) => ({ ...prev, [g.key]: !prev[g.key] })),
+            },
+              React.createElement('span', { className: 'dshmw-chev' },
+                React.createElement(SvgIcon, { d: ICONS.chevron, size: 9 })),
+              React.createElement('span', { className: 'dshmw-artgrouptitle' },
+                g.name + ' · ' + g.arts.length + ' 产物')))
+            if (closed) return
+            // 产物卡片：缩略预览直接渲染页面（缩放 iframe，指针穿透，点击卡片打开）。
+            hubBody.push(React.createElement('div', { key: 'grid-' + g.key, className: 'dshmw-artgrid' },
+              g.arts.map((a) => {
+                const st = a.runtime && typeof a.runtime.status === 'string' ? a.runtime.status : 'stopped'
+                const url = artifactUrl(a)
+                const pending = artPending[a.id] === true
+                const err = artError[a.id]
+                const dot = pending ? 'starting' : (err ? 'failed' : st)
+                const live = Boolean(a.runtime && a.runtime.url)
+                const thumbUrl = typeof a.thumbUrl === 'string' && a.thumbUrl !== '' ? HUB_URL + a.thumbUrl.replace(/^\//, '') : ''
+                return React.createElement('button', {
+                  key: a.id,
+                  type: 'button',
+                  className: 'dshmw-artcard',
+                  title: a.id
+                    + (a.runtime && a.runtime.url ? '\n' + a.runtime.url : '')
+                    + (pending ? '\n正在启动…' : '')
+                    + (err ? '\n启动失败：' + err : '')
+                    + (url === '' && !pending && !err ? '\n点击启动并打开' : ''),
+                  onClick: () => openArtifact(a),
                 },
-              },
-                React.createElement('span', { className: 'dshmw-dot ' + st }),
-                React.createElement('span', { className: 'dshmw-artname' }, a.name || a.id),
-                React.createElement('span', { className: 'dshmw-kind' }, a.kind)))
-            })
+                  React.createElement('div', { className: 'dshmw-artthumb' },
+                    React.createElement(ArtThumb, { live, url, thumbUrl })),
+                  React.createElement('div', { className: 'dshmw-artmeta' },
+                    React.createElement('span', { className: 'dshmw-dot ' + dot }),
+                    React.createElement('span', { className: 'dshmw-artname' }, a.name || a.id),
+                    React.createElement('span', { className: 'dshmw-kind' }, a.kind)))
+                })))
           })
         }
       }

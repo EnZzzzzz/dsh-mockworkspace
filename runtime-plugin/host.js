@@ -344,6 +344,7 @@ return {
       }
     }
     // 扫描批次目录产物根。HTML 入口优先 index.html，否则取字典序首个 .html。
+    // 构建产物目录认 dist/（Vite 等）与 out/（Next.js output:'export'）。
     async function scanBatchArtifacts(batchDir) {
       const found = []
       const walk = async (dir, depth) => {
@@ -360,12 +361,12 @@ return {
         }
         const subdirs = raw.filter((e) => e.type === 'directory')
         for (const sd of subdirs) {
-          if (sd.name !== 'dist') continue
+          if (sd.name !== 'dist' && sd.name !== 'out') continue
           let distRaw
-          try { distRaw = await fs.listDir(await resolveTarget(joinPath(dir, 'dist'))) } catch (err) { distRaw = [] }
+          try { distRaw = await fs.listDir(await resolveTarget(joinPath(dir, sd.name))) } catch (err) { distRaw = [] }
           const entryFile = htmlEntry(distRaw.filter((e) => e.type === 'file').map((e) => e.name))
           if (entryFile !== '') {
-            found.push({ name: baseName(dir) || 'dist', kind: 'dist', rootPath: joinPath(dir, 'dist'), entryFile })
+            found.push({ name: baseName(dir) || 'dist', kind: 'dist', rootPath: joinPath(dir, sd.name), entryFile })
             return // 命中即止，不再下钻
           }
         }
@@ -381,6 +382,70 @@ return {
       }
       await walk(batchDir, 0)
       return found
+    }
+
+    // ---- 自动构建：扫描无果时找含 build 脚本的前端项目，install + build 后重扫 ----
+    // 包管理器按 lockfile 判定，默认 npm；构建失败不阻断归档（诊断记录进 record.json）。
+    const BUILD_PM_LOCKS = [['pnpm-lock.yaml', 'pnpm'], ['package-lock.json', 'npm'], ['yarn.lock', 'yarn']]
+    async function runShellCommand(command) {
+      if (shell === undefined) return { code: -1, output: 'shell 服务不可用' }
+      const request = { command }
+      let spec
+      try {
+        spec = shell.resolve(request)
+      } catch (err) {
+        spec = request
+      }
+      try {
+        const result = await shell.run(spec)
+        return { code: result.exitCode, output: String(result.stderr || result.stdout || '').slice(-2000) }
+      } catch (err) {
+        return { code: -1, output: errorText(err) }
+      }
+    }
+    // 找含 scripts.build 的 package.json 所在目录（项目根），命中即停下钻，避免子包重复构建。
+    async function findBuildProjects(batchDir) {
+      const projects = []
+      const walk = async (dir, depth) => {
+        if (depth > 3 || projects.length >= 8) return
+        let raw
+        try {
+          raw = await fs.listDir(await resolveTarget(dir))
+        } catch (err) { return }
+        if (raw.some((e) => e.type === 'file' && e.name === 'package.json')) {
+          try {
+            const pkg = JSON.parse(await fs.readText(await resolveTarget(joinPath(dir, 'package.json'))))
+            const scripts = pkg && pkg.scripts
+            if (scripts && typeof scripts.build === 'string' && scripts.build !== '') {
+              projects.push(dir)
+              return
+            }
+          } catch (err) { /* package.json 解析失败按非项目处理，继续下钻 */ }
+        }
+        for (const sd of raw.filter((e) => e.type === 'directory')) {
+          if (ARCHIVE_SKIP_DIRS.has(sd.name) || sd.name === 'dist' || sd.name === 'out') continue
+          await walk(joinPath(dir, sd.name), depth + 1)
+        }
+      }
+      await walk(batchDir, 0)
+      return projects
+    }
+    // 缺 node_modules 时先 install；随后 <pm> run build，输出只留尾部 2000 字符做诊断。
+    async function buildProject(dir) {
+      let pm = 'npm'
+      for (const pair of BUILD_PM_LOCKS) {
+        if (await statExists(joinPath(dir, pair[0]))) { pm = pair[1]; break }
+      }
+      const cd = 'cd "' + dir.replace(/"/g, '\\"') + '"'
+      const steps = []
+      if (!(await statExists(joinPath(dir, 'node_modules')))) {
+        const inst = await runShellCommand(cd + ' && ' + pm + ' install')
+        steps.push({ step: 'install', command: pm + ' install', ok: inst.code === 0, output: inst.output })
+        if (inst.code !== 0) return { dir, pm, ok: false, steps }
+      }
+      const build = await runShellCommand(cd + ' && ' + pm + ' run build')
+      steps.push({ step: 'build', command: pm + ' run build', ok: build.code === 0, output: build.output })
+      return { dir, pm, ok: build.code === 0, steps }
     }
 
     // ---- RPC：归档会话（产物快照 + 会话记录，供 Hub「用例迭代」时间线） ----
@@ -405,7 +470,15 @@ return {
         const archiveDir = joinPath(joinPath(archivesRoot, batchId), ts)
         await mkdirp(archiveDir)
 
-        const artifacts = await scanBatchArtifacts(batchPath)
+        let artifacts = await scanBatchArtifacts(batchPath)
+        // 扫描无果：可能是未构建的前端项目（无 index.html / dist），自动 install + build 后重扫。
+        const builds = []
+        if (artifacts.length === 0) {
+          for (const dir of await findBuildProjects(batchPath)) {
+            builds.push(await buildProject(dir))
+          }
+          if (builds.some((b) => b.ok)) artifacts = await scanBatchArtifacts(batchPath)
+        }
         const snapshots = []
         for (const a of artifacts) {
           const snapName = a.kind === 'dist' ? safeName(a.name) + '-dist' : safeName(a.name) + '-site'
@@ -423,6 +496,7 @@ return {
           promptHash: (meta && meta.promptHash) || '',
           archivedAt: now.toISOString(),
           artifacts: snapshots,
+          builds,
         }
         const recordTarget = await resolveTarget(joinPath(archiveDir, 'record.json'))
         await fs.writeText(recordTarget, JSON.stringify(record, null, 2))

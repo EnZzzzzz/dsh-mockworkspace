@@ -38,6 +38,67 @@ export function apply(ctx) {
   const ARCHIVE_SKIP_DIRS = new Set(['node_modules', '.git', '.next', '.turbo', '.cache'])
   const safeSnapName = (s) => String(s || 'dist').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'dist'
 
+  // ---- 自动构建：归档扫描无果时找含 build 脚本的前端项目，install + build 后重扫 ----
+  // 包管理器按 lockfile 判定，默认 npm；构建失败不阻断归档（诊断记录进 record.json）。
+  const BUILD_PM_LOCKS = [['pnpm-lock.yaml', 'pnpm'], ['package-lock.json', 'npm'], ['yarn.lock', 'yarn']]
+  const BUILD_TIMEOUT_MS = 10 * 60 * 1000
+  // PATH 补常见 node/npm 目录（同 start-hub：Electron 壳下 process.env.PATH 可能缺）。
+  function runBuildCommand(command, cwd) {
+    return new Promise((resolve) => {
+      const extraPaths = [dirname(process.execPath), '/usr/local/bin', '/opt/homebrew/bin']
+      const env = Object.assign({}, process.env, {
+        PATH: extraPaths.concat(String(process.env.PATH || '')).join(':'),
+      })
+      const child = spawn(command, [], { cwd, shell: true, env })
+      let output = ''
+      const timer = setTimeout(() => { child.kill('SIGKILL') }, BUILD_TIMEOUT_MS)
+      child.stdout.on('data', (d) => { output = (output + d).slice(-4000) })
+      child.stderr.on('data', (d) => { output = (output + d).slice(-4000) })
+      child.on('error', (err) => { clearTimeout(timer); resolve({ code: -1, output: errorText(err) }) })
+      child.on('close', (code) => { clearTimeout(timer); resolve({ code: code === null ? -1 : code, output: output.slice(-2000) }) })
+    })
+  }
+  // 找含 scripts.build 的 package.json 所在目录（项目根），命中即停下钻，避免子包重复构建。
+  async function findBuildProjects(batchDir) {
+    const projects = []
+    const walk = async (dir, depth) => {
+      if (depth > 3 || projects.length >= 8) return
+      let entries
+      try { entries = await fsReaddir(dir, { withFileTypes: true }) } catch (err) { return }
+      if (entries.some((e) => e.isFile() && e.name === 'package.json')) {
+        try {
+          const pkg = JSON.parse(await readFile(pathJoin(dir, 'package.json'), 'utf8'))
+          if (pkg && pkg.scripts && typeof pkg.scripts.build === 'string' && pkg.scripts.build !== '') {
+            projects.push(dir)
+            return
+          }
+        } catch (err) { /* package.json 解析失败按非项目处理，继续下钻 */ }
+      }
+      for (const d of entries.filter((e) => e.isDirectory())) {
+        if (ARCHIVE_SKIP_DIRS.has(d.name) || d.name === 'dist' || d.name === 'out') continue
+        await walk(pathJoin(dir, d.name), depth + 1)
+      }
+    }
+    await walk(batchDir, 0)
+    return projects
+  }
+  // 缺 node_modules 时先 install；随后 <pm> run build，输出只留尾部 2000 字符做诊断。
+  async function buildProject(dir) {
+    let pm = 'npm'
+    for (const pair of BUILD_PM_LOCKS) {
+      if (existsSync(pathJoin(dir, pair[0]))) { pm = pair[1]; break }
+    }
+    const steps = []
+    if (!existsSync(pathJoin(dir, 'node_modules'))) {
+      const inst = await runBuildCommand(pm + ' install', dir)
+      steps.push({ step: 'install', command: pm + ' install', ok: inst.code === 0, output: inst.output })
+      if (inst.code !== 0) return { dir, pm, ok: false, steps }
+    }
+    const build = await runBuildCommand(pm + ' run build', dir)
+    steps.push({ step: 'build', command: pm + ' run build', ok: build.code === 0, output: build.output })
+    return { dir, pm, ok: build.code === 0, steps }
+  }
+
   // ---- 路径工具 ----
   function workspaceRootFallback() {
     const sandboxPolicy = ctx.get('sandboxPolicy')
@@ -339,6 +400,7 @@ export function apply(ctx) {
             await fsmkdir(archiveDir, { recursive: true })
 
             // 扫描产物根。HTML 入口优先 index.html，否则取字典序首个 .html。
+            // 构建产物目录认 dist/（Vite 等）与 out/（Next.js output:'export'）。
             const found = []
             const walk = async (dir, depth) => {
               if (depth > 3) return
@@ -351,8 +413,8 @@ export function apply(ctx) {
               }
               const dirs = entries.filter((e) => e.isDirectory())
               for (const d of dirs) {
-                if (d.name !== 'dist') continue
-                const distRoot = pathJoin(dir, 'dist')
+                if (d.name !== 'dist' && d.name !== 'out') continue
+                const distRoot = pathJoin(dir, d.name)
                 let distEntries
                 try { distEntries = await fsReaddir(distRoot, { withFileTypes: true }) } catch (err) { distEntries = [] }
                 const entryFile = htmlEntry(distEntries.filter((e) => e.isFile()).map((e) => e.name))
@@ -372,6 +434,14 @@ export function apply(ctx) {
               }
             }
             await walk(batchPath, 0)
+            // 扫描无果：可能是未构建的前端项目（无 index.html / dist），自动 install + build 后重扫。
+            const builds = []
+            if (found.length === 0) {
+              for (const dir of await findBuildProjects(batchPath)) {
+                builds.push(await buildProject(dir))
+              }
+              if (builds.some((b) => b.ok)) await walk(batchPath, 0)
+            }
 
             const snapshots = []
             for (const a of found) {
@@ -394,6 +464,7 @@ export function apply(ctx) {
               promptHash: (meta && meta.promptHash) || '',
               archivedAt: now.toISOString(),
               artifacts: snapshots,
+              builds,
             }
             await fswriteFile(pathJoin(archiveDir, 'record.json'), JSON.stringify(record, null, 2), 'utf8')
             return { ok: true, record }

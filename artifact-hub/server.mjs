@@ -1088,6 +1088,16 @@ async function startArtifact(id) {
     rt.status = 'failed'
     rt.error = `等待端口 ${port} 就绪超时（${READY_TIMEOUT_MS / 1000}s），见日志`
   }
+  if (rt.status === 'failed' && rt.error) {
+    // 失败附带日志尾部（如 Next「Another next dev server is already running」），
+    // 让界面 title 直接给出可操作原因；剥离 ANSI 转义与 [hub]/脚本回显行。
+    const tail = rt.log
+      .map((e) => String((e && e.line) || '').replace(/\u001b\[[0-9;?]*[a-zA-Z]/g, '').trim())
+      .filter((l) => l !== '' && !l.startsWith('[hub]') && !l.startsWith('>'))
+      .slice(-6)
+      .join(' | ')
+    if (tail !== '') rt.error += '：' + (tail.length > 300 ? '…' + tail.slice(-300) : tail)
+  }
   return rt
 }
 
@@ -1259,7 +1269,114 @@ async function serveArchive(req, res, urlPath) {
     'cache-control': 'no-cache',
   })
   if (req.method === 'HEAD') { res.end(); return }
+  if (ext === '.html' || ext === '.htm') {
+    // 静态导出（Next.js export / Vite 默认）常把资源写成根绝对路径（/_next/…、/assets/…），
+    // 在 /archive/<batchId>/<ts>/<snapDir>/ 子路径下伺服会 404：改写为带归档前缀的绝对路径。
+    // 字符类含 \ 以兼容内联 RSC 脚本里的转义形式（\"/_next/…）。
+    const prefix = '/archive/' + segments[0] + '/' + segments[1] + '/' + segments[2]
+    const html = (await fsp.readFile(filePath, 'utf8'))
+      .replace(/(["'(=\\])\/(_next|assets|static)\//g, '$1' + prefix + '/$2/')
+    res.end(html)
+    return
+  }
   res.end(await fsp.readFile(filePath))
+}
+
+// ---------------------------------------------------------------- 归档快照缩略图（headless Chrome 截图，落盘缓存）
+
+const CHROME_CANDIDATES = [
+  process.env.CHROME_PATH || '',
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  '/Applications/Chromium.app/Contents/MacOS/Chromium',
+  '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+].filter((p) => p !== '')
+let chromePathCached // undefined 未探测 | null 不可用 | string 可用路径
+async function chromePath() {
+  if (chromePathCached !== undefined) return chromePathCached
+  for (const p of CHROME_CANDIDATES) {
+    if (await pathExists(p)) { chromePathCached = p; return p }
+  }
+  chromePathCached = null
+  return null
+}
+
+// 同一快照的截图请求合并（并发只跑一个 Chrome）；写临时文件再改名，避免读到半成品。
+const thumbInflight = new Map()
+async function ensureThumb(batchId, ts, snapDir, thumbPath) {
+  if (await pathExists(thumbPath)) return true
+  const key = batchId + '/' + ts + '/' + snapDir
+  if (thumbInflight.has(key)) return thumbInflight.get(key)
+  const promise = (async () => {
+    try {
+      const chrome = await chromePath()
+      if (chrome === null) return false
+      const url = HUB_BASE + '/archive/' + [batchId, ts, snapDir].map(encodeURIComponent).join('/') + '/'
+      const tmpPath = thumbPath + '.tmp-' + process.pid + '.png'
+      const code = await new Promise((resolve) => {
+        const child = spawn(chrome, [
+          '--headless', '--disable-gpu', '--no-first-run', '--hide-scrollbars',
+          '--force-device-scale-factor=1', '--window-size=1200,900',
+          '--screenshot=' + tmpPath, url,
+        ], { stdio: 'ignore' })
+        const timer = setTimeout(() => { try { child.kill('SIGKILL') } catch { /* 已退出 */ } }, 30000)
+        child.on('error', () => { clearTimeout(timer); resolve(-1) })
+        child.on('exit', (c) => { clearTimeout(timer); resolve(c === null ? -1 : c) })
+      })
+      if (code !== 0 || !(await pathExists(tmpPath))) {
+        await fsp.rm(tmpPath, { force: true }).catch(() => {})
+        return false
+      }
+      await fsp.rename(tmpPath, thumbPath)
+      return true
+    } catch (err) {
+      return false
+    } finally {
+      thumbInflight.delete(key)
+    }
+  })()
+  thumbInflight.set(key, promise)
+  return promise
+}
+
+/** 伺服归档快照缩略图：/thumb/<batchId>/<ts>/<snapshotDir>（首次请求时截图生成）。 */
+async function serveThumb(req, res, urlPath) {
+  const segments = urlPath.slice('/thumb/'.length).split('/').filter((s) => s !== '')
+  const dec = (s) => { try { return decodeURIComponent(s) } catch (err) { return null } }
+  if (segments.length !== 3) {
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
+    res.end('缺缩略图路径')
+    return
+  }
+  const batchId = dec(segments[0])
+  const ts = dec(segments[1])
+  const snapDir = dec(segments[2])
+  if (!batchId || !ts || !snapDir) {
+    res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
+    res.end('非法缩略图路径')
+    return
+  }
+  // 快照目录必须真实存在（边界校验同 serveArchive，防目录穿越）
+  const snapRoot = path.join(ARCHIVES_DIR, batchId, ts, snapDir)
+  if (!path.resolve(snapRoot).startsWith(path.resolve(path.join(ARCHIVES_DIR, batchId, ts)) + path.sep)) {
+    res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
+    res.end('越界路径')
+    return
+  }
+  const snapStat = await fsp.stat(snapRoot).catch(() => null)
+  if (!snapStat || !snapStat.isDirectory()) {
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
+    res.end('快照不存在')
+    return
+  }
+  const thumbPath = path.join(ARCHIVES_DIR, batchId, ts, snapDir + '.thumb.png')
+  if (!(await ensureThumb(batchId, ts, snapDir, thumbPath))) {
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
+    res.end('截图不可用（需要本机 Chrome）')
+    return
+  }
+  res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'no-cache' })
+  if (req.method === 'HEAD') { res.end(); return }
+  res.end(await fsp.readFile(thumbPath))
 }
 
 // ---------------------------------------------------------------- 管理页静态资源
@@ -1300,10 +1417,29 @@ function sendJson(res, status, value) {
 
 async function apiState() {
   const items = await scanArtifactsCached(0)
+  // 每批次的最新归档快照路径：node 类产物未运行（无 runtime.url）时，
+  // 面板缩略图与点击可回退到最近一次归档的静态快照。entries 已按时间倒序，首中即最新。
+  const archives = await scanArchives().catch(() => [])
+  const snapByBatch = new Map()
+  for (const e of archives) {
+    if (snapByBatch.has(e.batchId)) continue
+    const snap = (e.artifacts || []).find((s) => s && s.snapshotDir)
+    const ts = String(e.archiveId || '').split('/')[1] || ''
+    if (!snap || ts === '') continue
+    const segs = [e.batchId, ts, snap.snapshotDir].map(encodeURIComponent).join('/')
+    snapByBatch.set(e.batchId, { url: '/archive/' + segs + '/', thumb: '/thumb/' + segs })
+  }
   const batches = new Map()
   for (const a of items) {
     if (!batches.has(a.batchId)) batches.set(a.batchId, { batchId: a.batchId, name: a.batchName, artifacts: [] })
-    batches.get(a.batchId).artifacts.push({ ...a, absDir: undefined, pkg: undefined, runtime: runtimeView(a.id, a) })
+    batches.get(a.batchId).artifacts.push({
+      ...a,
+      absDir: undefined,
+      pkg: undefined,
+      runtime: runtimeView(a.id, a),
+      archiveUrl: (snapByBatch.get(a.batchId) || {}).url || null,
+      thumbUrl: (snapByBatch.get(a.batchId) || {}).thumb || null,
+    })
   }
   return {
     root: MOCK_ROOT,
@@ -1399,6 +1535,10 @@ const server = http.createServer(async (req, res) => {
     }
     if (urlPath.startsWith('/archive/')) {
       await serveArchive(req, res, urlPath)
+      return
+    }
+    if (urlPath.startsWith('/thumb/')) {
+      await serveThumb(req, res, urlPath)
       return
     }
     if (urlPath.startsWith('/preview/')) {
