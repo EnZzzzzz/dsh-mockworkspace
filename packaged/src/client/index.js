@@ -81,6 +81,7 @@ const ICONS = {
   chevron: 'M3 6 L8 11 L13 6',
   chevL: 'M10 3 L5 8 L10 13',
   chevR: 'M6 3 L11 8 L6 13',
+  share: 'M8 9.5 V2.5 M5.5 5 L8 2.5 L10.5 5 M3.5 8 V12.5 A1 1 0 0 0 4.5 13.5 H11.5 A1 1 0 0 0 12.5 12.5 V8',
 }
 
 // 产物托管 Hub（artifact-hub/server.mjs）管理页地址；改端口需与
@@ -94,6 +95,8 @@ const CSS = `
 .dshmw-title{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:13px;font-weight:600}
 .dshmw-headbtn{flex:none;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:none;border-radius:6px;padding:0;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary)}
 .dshmw-headbtn:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
+.dshmw-headbtn:disabled{opacity:.45;cursor:default}
+.dshmw-headbtn:disabled:hover{background:transparent;color:var(--dsw-alias-label-secondary)}
 .dshmw-card{flex:none;border:1px solid var(--dsw-alias-border-l1);border-radius:10px}
 .dshmw-cardhead{display:flex;align-items:center;gap:6px;padding:6px 8px 6px 6px;border-bottom:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-secondary)}
 .dshmw-collapse{flex:none;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border:none;border-radius:5px;padding:0;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary)}
@@ -151,10 +154,12 @@ const CSS = `
 .dshmw-empty{padding:12px 10px;color:var(--dsw-alias-label-secondary);font-size:13px}
 .dshmw-hint{margin-top:4px;font-size:12px;opacity:.75}
 .dshmw-rootpath{flex:none;padding:0 6px;font-size:11px;opacity:.55;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--dsw-alias-label-secondary)}
-.dshmw-hubrow{display:flex;align-items:center;gap:7px;padding:5px 6px;font-size:12px;color:var(--dsw-alias-label-secondary)}
-.dshmw-huburl{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.dshmw-hubstatus{flex:none;display:inline-flex;align-items:center;gap:5px;border:none;border-radius:6px;padding:3px 6px;background:transparent;cursor:pointer;color:var(--dsw-alias-label-tertiary,#8a919d);font-size:11px;font-family:inherit}
+.dshmw-hubstatus:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary)}
 .dshmw-hubdot{flex:none;width:7px;height:7px;border-radius:50%;background:var(--dsw-alias-label-tertiary,#8a919d)}
 .dshmw-hubdot.online{background:var(--dsw-alias-state-success-primary);box-shadow:0 0 4px rgba(63,185,105,.7)}
+.dshmw-hubdot.offline{background:var(--dsw-alias-state-error-primary);box-shadow:0 0 4px rgba(240,84,84,.6)}
+.dshmw-hubdot.starting{background:#d9a13b;animation:dshmw-pulse 1.1s infinite}
 .dshmw-artgrouplabel{padding:3px 6px 1px;font-size:11px;color:var(--dsw-alias-label-secondary);opacity:.7;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .dshmw-art{display:flex;align-items:center;gap:7px;width:100%;min-height:26px;padding:0 6px;box-sizing:border-box;border:none;border-radius:6px;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:12px;text-align:left}
 .dshmw-art:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
@@ -763,6 +768,44 @@ function openCaseMenu(c, e) {
   window.addEventListener('scroll', closeCaseMenu, true)
 }
 
+// ---- 头部「打开后台服务页面」菜单：系统浏览器 / 内置浏览器 ----
+// 复用用例菜单的 ctxmenu 样式与全局关闭监听（closeCaseMenu 一并关闭本菜单）。
+function openHubPageMenu(e) {
+  e.preventDefault()
+  e.stopPropagation()
+  closeCaseMenu()
+  const anchor = e.currentTarget
+  const menu = document.createElement('div')
+  menu.className = 'dshmw-ctxmenu'
+  const itemSys = document.createElement('button')
+  itemSys.type = 'button'
+  itemSys.className = 'dshmw-ctxitem'
+  itemSys.textContent = '在系统浏览器打开'
+  itemSys.title = HUB_URL
+  itemSys.onclick = () => {
+    closeCaseMenu()
+    try { window.open(HUB_URL, '_blank', 'noopener') } catch (err) { /* ignore */ }
+  }
+  const itemBuiltin = document.createElement('button')
+  itemBuiltin.type = 'button'
+  itemBuiltin.className = 'dshmw-ctxitem'
+  itemBuiltin.textContent = '在内置浏览器打开'
+  itemBuiltin.title = HUB_URL
+  itemBuiltin.onclick = () => { closeCaseMenu(); openInBuiltinBrowser(HUB_URL) }
+  menu.appendChild(itemSys)
+  menu.appendChild(itemBuiltin)
+  document.body.appendChild(menu)
+  const rect = anchor && typeof anchor.getBoundingClientRect === 'function' ? anchor.getBoundingClientRect() : null
+  const pad = 8
+  menu.style.left = Math.max(pad, Math.min(rect ? rect.left : e.clientX, window.innerWidth - menu.offsetWidth - pad)) + 'px'
+  menu.style.top = Math.max(pad, Math.min(rect ? rect.bottom + 4 : e.clientY, window.innerHeight - menu.offsetHeight - pad)) + 'px'
+  ctxMenuEl = menu
+  window.addEventListener('mousedown', onCtxMenuDocDown, true)
+  window.addEventListener('contextmenu', onCtxMenuDocCtx, true)
+  window.addEventListener('keydown', onCtxMenuDocKey, true)
+  window.addEventListener('scroll', closeCaseMenu, true)
+}
+
 // 找当前可见的聊天输入框：优先主对话区最底部的 textarea / contenteditable，
 // 排除本插件面板自身的元素。
 function findComposerInput() {
@@ -1196,7 +1239,8 @@ function MockPanel(props) {
     return () => clearInterval(timer)
   }, [pingHub])
 
-  // 手动启动 Hub：走 Host start-hub（detached spawn，进程独立于 dsh 常驻）。
+  // 启动 Hub：走 Host start-hub（detached spawn，进程独立于 dsh 常驻）。
+  // 由面板打开时的自动拉起与头部「后台服务」状态灯点击共同触发。
   // starting 期间按钮置灰；Host 已等待就绪，这里回来后再补两次探测覆盖慢启动。
   const [hubStarting, setHubStarting] = React.useState(false)
   const [hubStartError, setHubStartError] = React.useState(null)
@@ -1210,6 +1254,17 @@ function MockPanel(props) {
       .catch((err) => setHubStartError(err && err.message ? String(err.message) : String(err)))
       .finally(() => setHubStarting(false))
   }, [hubStarting, pingHub])
+
+  const hubOnline = hub !== null && hub.online === true
+  // 打开面板即自动拉起后台服务：探测到离线时启动一次，失败不循环
+  // （点头部「后台服务」状态灯可手动重试）；恢复在线后允许再次自动拉起。
+  const hubAutoStarted = React.useRef(false)
+  React.useEffect(() => {
+    if (hubOnline) { hubAutoStarted.current = false; return }
+    if (hubAutoStarted.current || hub === null || hubStarting) return
+    hubAutoStarted.current = true
+    startHub()
+  }, [hub, hubOnline, hubStarting, startHub])
 
   const openHub = React.useCallback(() => {
     // 打开「用例结果」悬浮窗（shell.overlay）：任何界面可用（含新建会话页，
@@ -1302,14 +1357,38 @@ function MockPanel(props) {
   })
 
   const header = React.createElement('div', { className: 'dshmw-header' },
-    React.createElement('span', { className: 'dshmw-title' }, 'Mock 实验场'),
-    React.createElement('button', {
-      type: 'button',
-      className: 'dshmw-headbtn',
-      title: '刷新',
-      'aria-label': '刷新',
-      onClick: () => { setReloadKey((k) => k + 1) },
-    }, React.createElement(SvgIcon, { d: ICONS.refresh, size: 15 })))
+    React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 } },
+      React.createElement('span', { className: 'dshmw-title' }, 'Mock 实验场'),
+      // 后台服务状态灯：绿=在线 / 红=离线（点击启动）/ 琥珀=启动中 / 灰=探测中。
+      React.createElement('button', {
+        type: 'button',
+        className: 'dshmw-hubstatus',
+        title: '后台服务 ' + (hub === null ? '探测中…'
+          : hubOnline ? '在线 · ' + HUB_URL
+          : hubStarting ? '启动中…'
+          : (hubStartError ? '启动失败：' + hubStartError + ' · 点击重试' : '未在线 · 点击启动')),
+        onClick: () => { if (!hubOnline && !hubStarting) startHub() },
+      },
+        React.createElement('span', {
+          className: 'dshmw-hubdot' + (hubOnline ? ' online' : hubStarting ? ' starting' : hub !== null ? ' offline' : ''),
+        }),
+        '后台服务')),
+    React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 2 } },
+      React.createElement('button', {
+        type: 'button',
+        className: 'dshmw-headbtn',
+        disabled: !hubOnline,
+        title: hubOnline ? '打开后台服务页面' : '后台服务未在线',
+        'aria-label': '打开后台服务页面',
+        onClick: (e) => openHubPageMenu(e),
+      }, React.createElement(SvgIcon, { d: ICONS.share, size: 15 })),
+      React.createElement('button', {
+        type: 'button',
+        className: 'dshmw-headbtn',
+        title: '刷新',
+        'aria-label': '刷新',
+        onClick: () => { setReloadKey((k) => k + 1) },
+      }, React.createElement(SvgIcon, { d: ICONS.refresh, size: 15 }))))
 
   // ---- 卡片② 实验批次（批次 = 会话分组，轨迹 = 会话日志） ----
   const batchBody = []
@@ -1362,7 +1441,7 @@ function MockPanel(props) {
   const currentSet = Array.isArray(libSets) ? libSets.find((s) => s.id === libSetId) : null
   if (!hubOnlineForLib) {
     libBody.push(React.createElement('div', { key: 'offline', className: 'dshmw-hint', style: { padding: '2px 6px 6px', marginTop: 0 } },
-      '用例库由产物托管 Hub 承载，先在「产物托管」卡片点「启动」'))
+      '用例库由后台服务承载，等待服务上线（也可点顶部「后台服务」状态灯手动启动）'))
   } else if (libImporting) {
     libBody.push(React.createElement(LibraryImportForm, {
       key: 'import',
@@ -1461,28 +1540,14 @@ function MockPanel(props) {
       '导入'),
   }, libBody)
 
-  // ---- 卡片① 产物托管（artifact-hub 总览：状态 + 产物清单，点击直达） ----
+  // ---- 卡片① 产物托管（artifact-hub 产物清单，点击直达） ----
+  // 服务状态收敛到面板头部的「后台服务」状态灯，卡片内只保留产物内容。
   const hubBody = []
-  const hubOnline = hub !== null && hub.online === true
-  hubBody.push(React.createElement('div', { key: 'hub', className: 'dshmw-hubrow' },
-    React.createElement('span', { className: 'dshmw-hubdot' + (hubOnline ? ' online' : '') }),
-    React.createElement('span', { className: 'dshmw-huburl', title: HUB_URL }, HUB_URL.replace(/\/$/, '')),
-    React.createElement('span', null, hub === null ? '探测中' : hubOnline ? '在线' : '未启动'),
-    (!hubOnline && hub !== null)
-      ? React.createElement('button', {
-          type: 'button',
-          className: 'dshmw-cardbtn',
-          style: { marginLeft: 'auto' },
-          disabled: hubStarting,
-          title: '拉起 artifact-hub/server.mjs（detached 进程，独立于 dsh 常驻）',
-          onClick: startHub,
-        }, hubStarting ? '启动中…' : '启动')
-      : null))
   if (!hubOnline) {
-    hubBody.push(React.createElement('div', { key: 'hint', className: 'dshmw-hint', style: { padding: '0 6px 6px', marginTop: 0 } },
+    hubBody.push(React.createElement('div', { key: 'hint', className: 'dshmw-hint', style: { padding: '2px 6px 6px', marginTop: 0 } },
       hubStartError !== null
-        ? '启动失败：' + hubStartError + '（可手动运行：node artifact-hub/server.mjs，日志见 artifact-hub/hub.log）'
-        : '点「启动」一键拉起，或手动：node artifact-hub/server.mjs'))
+        ? '后台服务启动失败：' + hubStartError + '（点顶部「后台服务」状态灯重试，或手动：node artifact-hub/server.mjs）'
+        : hub === null ? '正在探测后台服务…' : '正在启动后台服务…'))
   } else {
     const hubBatches = hub.batches || []
     const total = hubBatches.reduce((n, b) => n + ((b.artifacts || []).length), 0)
@@ -1521,7 +1586,7 @@ function MockPanel(props) {
     actions: React.createElement('button', {
       type: 'button',
       className: 'dshmw-cardbtn',
-      title: hubOnline ? '打开「用例结果」悬浮窗（任何界面可用，可拖动）' : 'Hub 未启动 · 先启动 Hub 再打开「用例结果」',
+      title: hubOnline ? '打开「用例结果」悬浮窗（任何界面可用，可拖动）' : '后台服务未在线，上线后可打开「用例结果」',
       onClick: () => openHub(),
     },
       React.createElement(SvgIcon, { d: ICONS.globe, size: 11 }),
