@@ -135,7 +135,7 @@ Host 轮询 `GET /api/state` 最长 10s 等待就绪。Hub 的启动与产物发
 
 批次会话行悬停的**「归档」按钮现在是三合一**：
 
-1. **产物归档**：扫批次目录产物（`dist/index.html` 优先，其次 `index.html`
+1. **产物归档**：扫批次目录 HTML 产物（优先 `index.html`，否则取字典序首个 `.html`
    静态根），快照复制到 `<mock 根>/case-library/archives/<batchId>/<时间戳>/`
    （跳过 node_modules/.git；批次目录即使删除，归档快照仍在）
 2. **会话记录归档**：写 `record.json`（archiveId / batchId / sessionId /

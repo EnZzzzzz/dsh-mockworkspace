@@ -343,7 +343,7 @@ return {
         }
       }
     }
-    // 扫描批次目录产物根（与 Hub 检出规则一致：dist/index.html 优先，其次 index.html）。
+    // 扫描批次目录产物根。HTML 入口优先 index.html，否则取字典序首个 .html。
     async function scanBatchArtifacts(batchDir) {
       const found = []
       const walk = async (dir, depth) => {
@@ -353,17 +353,25 @@ return {
           const target = await resolveTarget(dir)
           raw = await fs.listDir(target)
         } catch (err) { return }
-        const fileNames = new Set(raw.filter((e) => e.type === 'file').map((e) => e.name))
+        const fileNames = raw.filter((e) => e.type === 'file').map((e) => e.name)
+        const htmlEntry = (names) => {
+          const html = names.filter((name) => /\.html?$/i.test(name)).sort()
+          return html.includes('index.html') ? 'index.html' : (html[0] || '')
+        }
         const subdirs = raw.filter((e) => e.type === 'directory')
         for (const sd of subdirs) {
           if (sd.name !== 'dist') continue
-          if (await statExists(joinPath(dir, 'dist/index.html'))) {
-            found.push({ name: baseName(dir) || 'dist', kind: 'dist', rootPath: joinPath(dir, 'dist') })
+          let distRaw
+          try { distRaw = await fs.listDir(await resolveTarget(joinPath(dir, 'dist'))) } catch (err) { distRaw = [] }
+          const entryFile = htmlEntry(distRaw.filter((e) => e.type === 'file').map((e) => e.name))
+          if (entryFile !== '') {
+            found.push({ name: baseName(dir) || 'dist', kind: 'dist', rootPath: joinPath(dir, 'dist'), entryFile })
             return // 命中即止，不再下钻
           }
         }
-        if (fileNames.has('index.html')) {
-          found.push({ name: baseName(dir) || 'site', kind: 'static', rootPath: dir })
+        const entryFile = htmlEntry(fileNames)
+        if (entryFile !== '') {
+          found.push({ name: baseName(dir) || 'site', kind: 'static', rootPath: dir, entryFile })
           return
         }
         for (const sd of subdirs) {
@@ -402,7 +410,7 @@ return {
         for (const a of artifacts) {
           const snapName = a.kind === 'dist' ? safeName(a.name) + '-dist' : safeName(a.name) + '-site'
           await copyTree(a.rootPath, joinPath(archiveDir, snapName), ARCHIVE_SKIP_DIRS)
-          snapshots.push({ name: a.name, kind: a.kind, snapshotDir: snapName })
+          snapshots.push({ name: a.name, kind: a.kind, snapshotDir: snapName, entryFile: a.entryFile })
         }
 
         const record = {

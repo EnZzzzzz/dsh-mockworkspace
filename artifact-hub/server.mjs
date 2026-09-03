@@ -1319,6 +1319,16 @@ const server = http.createServer(async (req, res) => {
     const u = new URL(req.url, HUB_BASE)
     const urlPath = u.pathname
 
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, {
+        'access-control-allow-origin': '*',
+        'access-control-allow-methods': 'GET, POST, OPTIONS',
+        'access-control-allow-headers': 'content-type',
+      })
+      res.end()
+      return
+    }
+
     if (urlPath === '/api/state' && req.method === 'GET') {
       sendJson(res, 200, { ok: true, value: await apiState() })
       return
@@ -1361,6 +1371,20 @@ const server = http.createServer(async (req, res) => {
       const caseId = u.searchParams.get('caseId') || ''
       const all = await scanArchives()
       sendJson(res, 200, { ok: true, value: { entries: caseId ? all.filter((e) => e.caseId === caseId) : all } })
+      return
+    }
+    if (urlPath === '/api/iterations/delete' && req.method === 'POST') {
+      const body = await readBody(req)
+      const archiveId = String(body.archiveId || '')
+      const parts = safeRelPath(archiveId.split('/'))
+      if (!parts || parts.length !== 2) { sendJson(res, 400, { ok: false, error: 'archiveId 无效' }); return }
+      const archiveDir = path.join(ARCHIVES_DIR, parts[0], parts[1])
+      const record = await readJson(path.join(archiveDir, 'record.json'))
+      if (record === null) { sendJson(res, 404, { ok: false, error: '归档记录不存在' }); return }
+      const hasSnapshot = Array.isArray(record.artifacts) && record.artifacts.some((a) => a && a.snapshotDir)
+      if (hasSnapshot) { sendJson(res, 409, { ok: false, error: '仅允许删除没有页面快照的归档记录' }); return }
+      await fsp.rm(archiveDir, { recursive: true })
+      sendJson(res, 200, { ok: true, value: { archiveId } })
       return
     }
     if (urlPath === '/api/iterations/fork' && req.method === 'POST') {

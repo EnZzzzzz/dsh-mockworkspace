@@ -149,6 +149,7 @@ return {
 .dshmw-dot.failed{background:var(--dsw-alias-state-error-primary)}
 @keyframes dshmw-pulse{50%{opacity:.35}}
 .dshmw-select{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:11px;padding:2px 4px;font-family:inherit;max-width:100%}
+.dshmw-libset-select{min-width:0;max-width:160px}
 .dshmw-textarea{width:100%;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:11px;padding:5px 8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical;min-height:56px}
 .dshmw-textarea:focus{outline:none;border-color:var(--dsw-alias-border-l2)}
 .dshmw-fieldlabel{font-size:10px;color:var(--dsw-alias-label-secondary);opacity:.8}
@@ -223,7 +224,21 @@ return {
 .dshmw-hit-links{flex:none;display:flex;align-items:center;gap:6px;margin-left:auto}
 .dshmw-iter-link{flex:none;border:none;background:transparent;padding:0;font-family:inherit;font-size:11px;color:var(--dsw-alias-state-business-primary);cursor:pointer}
 .dshmw-iter-link:hover{text-decoration:underline}
+.dshmw-iter-link-danger{color:var(--dsw-alias-state-error-primary)}
 .dshmw-hit{display:flex;flex-direction:column;gap:6px}
+.dshmw-hit-card{flex:none;overflow:hidden;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-layer-1);transition:border-color .15s ease,box-shadow .15s ease,transform .15s ease}
+.dshmw-hit-card.clickable{cursor:pointer}
+.dshmw-hit-card.clickable:hover{border-color:var(--dsw-alias-state-business-primary);box-shadow:var(--dsw-shadow-lv1);transform:translateY(-1px)}
+.dshmw-hit-preview{position:relative;height:190px;overflow:hidden;background:var(--dsw-alias-bg-base);border-bottom:1px solid var(--dsw-alias-border-l1)}
+.dshmw-hit-preview iframe{display:block;width:100%;height:100%;border:0;pointer-events:none;background:#fff}
+.dshmw-hit-preview-empty{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;color:var(--dsw-alias-label-tertiary);font-size:11px;background:linear-gradient(135deg,var(--dsw-alias-bg-base),var(--dsw-alias-bg-layer-2))}
+.dshmw-hit-preview-icon{font-size:24px;line-height:1;opacity:.55}
+.dshmw-hit-preview-badge{position:absolute;right:8px;bottom:8px;border-radius:999px;padding:3px 8px;font-size:10px;color:#fff;background:rgba(15,17,21,.72);backdrop-filter:blur(6px)}
+.dshmw-hit-cardbody{display:flex;flex-direction:column;gap:7px;padding:9px 10px 10px}
+.dshmw-hit-cardtop{display:flex;align-items:center;gap:8px;min-width:0}
+.dshmw-hit-cardtitle{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary)}
+.dshmw-hit-cardmeta{display:flex;align-items:center;gap:8px;min-width:0;color:var(--dsw-alias-label-tertiary);font-size:11px}
+.dshmw-hit-cardmeta .dshmw-hit-sess{margin-left:auto}
 .dshmw-hit-panel{border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:8px;box-sizing:border-box;background:var(--dsw-alias-bg-base)}
 .dshmw-traj{display:flex;flex-direction:column;gap:6px;max-height:440px;overflow-y:auto}
 .dshmw-traj-full{max-height:none;flex:1;min-height:0}
@@ -310,6 +325,10 @@ return {
     const deleteLibSet = (setId) => hubApi('library/delete-set', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ setId }),
+    })
+    const deleteIteration = (archiveId) => hubApi('iterations/delete', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ archiveId }),
     })
 
     // ---- 会话头部 view ring（conversation.view）切换助手 ----
@@ -965,9 +984,8 @@ return {
       // 归档集合：归档后的会话从批次列表里消失（日志保留，可从归档恢复）。
       const w = ctx.get('workspaces')
       const wsList = w && w.list && typeof w.list.getSnapshot === 'function' ? w.list.getSnapshot() : null
-      const archivedIds = new Set((wsList && wsList.archivedSessionIds) || [])
-      const sessionIds = (batch.sessionIds || []).filter((id) => sessionsById[id] !== undefined && !archivedIds.has(id))
-      const [open, setOpen] = React.useState(true)
+      const sessionIds = props.sessionIds
+      const [open, setOpen] = React.useState(false)
       const [confirmDelete, setConfirmDelete] = React.useState(false)
 
       // 删除批次目录后顺带注销对应 workspace 注册（目录没了，注册留着是死引用）。
@@ -1065,7 +1083,7 @@ return {
                       return archiveSession(id).then(() => {
                         showCtxToast(hasSnap
                           ? '已归档（产物 + 会话记录）'
-                          : '已归档（未发现可快照产物：dist/index.html 或根 index.html，产物生成后可再归档一次）')
+                          : '已归档（未发现可快照 HTML 产物，产物生成后可再归档一次）')
                         props.onChanged()
                       })
                     })
@@ -1199,7 +1217,7 @@ return {
       React.useEffect(() => {
         if (!hubOnlineForLib || libSetId === '') { setLibData(null); return }
         let disposed = false
-        setLibData(null)
+        // 翻页时保留旧页，避免列表瞬间收缩导致外层侧栏滚回顶部。
         listLibCases(libSetId, { tag: libTag, offset: (libPage - 1) * LIB_PAGE_SIZE, limit: LIB_PAGE_SIZE })
           .then((v) => { if (!disposed) setLibData({ total: v.total, cases: v.cases || [] }) })
           .catch(() => { if (!disposed) setLibData({ total: 0, cases: [] }) })
@@ -1215,6 +1233,19 @@ return {
 
       const sessionsById = (sessions && sessions.byId) || {}
       const current = sessions && sessions.current
+      const workspaceService = ctx.get('workspaces')
+      const workspaceSnapshot = workspaceService && workspaceService.list && typeof workspaceService.list.getSnapshot === 'function'
+        ? workspaceService.list.getSnapshot()
+        : null
+      const archivedSessionIds = new Set((workspaceSnapshot && workspaceSnapshot.archivedSessionIds) || [])
+      const visibleBatches = batches === null ? null : batches.flatMap((batch) => {
+        if (batch.meta && batch.meta.status === 'archived') return []
+        const sessionIds = (batch.sessionIds || []).filter((id) => {
+          const session = sessionsById[id]
+          return session !== undefined && session.blank !== true && !archivedSessionIds.has(id)
+        })
+        return sessionIds.length > 0 ? [{ batch, sessionIds }] : []
+      })
 
       const header = React.createElement('div', { className: 'dshmw-header' },
         React.createElement('span', { className: 'dshmw-title' }, 'Mock 实验场'),
@@ -1234,7 +1265,7 @@ return {
             onClick: () => { setReloadKey((k) => k + 1) },
           }, React.createElement(SvgIcon, { d: ICONS.refresh, size: 15 }))))
 
-      // ---- 卡片① 实验批次（批次 = 会话分组，轨迹 = 会话日志） ----
+      // ---- 卡片② 实验批次（批次 = 会话分组，轨迹 = 会话日志） ----
       const batchBody = []
       if (showForm) {
         batchBody.push(React.createElement(NewBatchForm, {
@@ -1249,18 +1280,17 @@ return {
       }
       if (batches === null && !error) {
         batchBody.push(React.createElement('div', { key: 'loading', className: 'dshmw-status' }, '加载中…'))
-      } else if (batches !== null && batches.length === 0 && !error) {
+      } else if (visibleBatches !== null && visibleBatches.length === 0 && !error) {
         batchBody.push(React.createElement('div', { key: 'empty', className: 'dshmw-empty' },
-          React.createElement('div', null, '还没有批次'),
+          React.createElement('div', null, '还没有包含会话的批次'),
           React.createElement('div', { className: 'dshmw-hint' },
             '点卡片右上角「+ 新建」：输入一个名字，会创建独立的工作区目录并打开一个普通对话会话，轨迹与产物都会留在这个实验场里。')))
-      } else if (batches !== null) {
-        batches.forEach((batch) => {
-          // 归档批次从列表隐藏（目录与 meta 保留在 runs/ 下）。
-          if (batch.meta && batch.meta.status === 'archived') return
+      } else if (visibleBatches !== null) {
+        visibleBatches.forEach(({ batch, sessionIds }) => {
           batchBody.push(React.createElement(BatchRow, {
             key: batch.batchId || batch.path,
             batch,
+            sessionIds,
             sessionsById,
             current,
             onChanged: () => { setReloadKey((k) => k + 1) },
@@ -1281,7 +1311,7 @@ return {
           '新建'),
       }, batchBody)
 
-      // ---- 卡片② 用例库（benchmark prompts：导入 / 标签筛选 / 浏览） ----
+      // ---- 卡片③ 用例库（benchmark prompts：导入 / 标签筛选 / 浏览） ----
       const libBody = []
       const currentSet = Array.isArray(libSets) ? libSets.find((s) => s.id === libSetId) : null
       if (!hubOnlineForLib) {
@@ -1310,17 +1340,19 @@ return {
         const topTags = Object.keys(tagCounts).sort((a, b) => tagCounts[b] - tagCounts[a]).slice(0, 30)
         libBody.push(React.createElement('div', { key: 'sel', className: 'dshmw-formrow', style: { padding: '2px 6px 4px' } },
           React.createElement('select', {
-            className: 'dshmw-select',
-            style: { flex: 1 },
+            className: 'dshmw-select dshmw-libset-select',
+            style: { flex: '1 1 0' },
             value: libSetId,
             onChange: (e) => { setLibSetId(e.target.value); setLibTag(''); setLibConfirmDelete(false); setLibPage(1) },
-          }, libSets.map((s) =>
-            React.createElement('option', { key: s.id, value: s.id },
-              s.name + ' · ' + s.count))),
+          }, libSets.map((s) => {
+            const name = String(s.name || s.id)
+            const shortName = name.length > 12 ? name.slice(0, 10) + '…' : name
+            return React.createElement('option', { key: s.id, value: s.id, title: name }, shortName + ' · ' + s.count)
+          })),
           topTags.length > 0
             ? React.createElement('select', {
                 className: 'dshmw-select',
-                style: { flex: 1 },
+                style: { flex: '1 1 0', minWidth: 0 },
                 value: libTag,
                 title: '按标签筛选',
                 onChange: (e) => { setLibTag(e.target.value); setLibPage(1) },
@@ -1383,7 +1415,7 @@ return {
           '导入'),
       }, libBody)
 
-      // ---- 卡片③ 产物托管（artifact-hub 总览：状态 + 产物清单，点击直达） ----
+      // ---- 卡片① 产物托管（artifact-hub 总览：状态 + 产物清单，点击直达） ----
       const hubBody = []
       const hubOnline = hub !== null && hub.online === true
       hubBody.push(React.createElement('div', { key: 'hub', className: 'dshmw-hubrow' },
@@ -1460,9 +1492,9 @@ return {
             setReloadKey((k) => k + 1)
           },
         }) : null,
+        hubCard,
         batchCard,
         libCard,
-        hubCard,
         rootPath ? React.createElement('div', { className: 'dshmw-rootpath', title: rootPath }, '根: ' + rootPath) : null)
     }
 
@@ -1484,6 +1516,7 @@ return {
       const [openTool, setOpenTool] = React.useState({})      // `${sessionId}|${callId}` → true（工具参数/结果）
       const [starting, setStarting] = React.useState(false)
       const [startError, setStartError] = React.useState(null)
+      const [confirmDeleteArchiveId, setConfirmDeleteArchiveId] = React.useState(null)
 
       const errMsg = (err) => (err && err.message ? String(err.message) : String(err))
 
@@ -1696,19 +1729,35 @@ return {
         const rows = hits.map((e) => {
           const ts = String(e.archiveId || '').split('/')[1] || ''
           const snaps = (e.artifacts || []).filter((a) => a.snapshotDir).map((a) => {
-            const url = HUB_URL + 'archive/' + encodeURIComponent(e.batchId) + '/' + encodeURIComponent(ts) + '/' + encodeURIComponent(a.snapshotDir) + '/'
+            const entry = a.entryFile && a.entryFile !== 'index.html' ? encodeURIComponent(a.entryFile) : ''
+            const url = HUB_URL + 'archive/' + encodeURIComponent(e.batchId) + '/' + encodeURIComponent(ts) + '/' + encodeURIComponent(a.snapshotDir) + '/' + entry
             return { url, label: a.name || a.snapshotDir }
           })
-          return React.createElement('div', { key: e.archiveId || (e.batchId + '|' + e.sessionId), className: 'dshmw-hit' + (snaps.length > 0 ? ' clickable' : '') },
+          const primary = snaps[0] || null
+          const archiveKey = e.archiveId || (e.batchId + '|' + e.sessionId)
+          const confirmingDelete = confirmDeleteArchiveId === archiveKey
+          return React.createElement('article', {
+            key: archiveKey,
+            className: 'dshmw-hit-card' + (primary ? ' clickable' : ''),
+          },
             React.createElement('div', {
-              className: 'dshmw-hit-row',
-              title: snaps.length > 0 ? '打开该次归档的快照' : '该次归档无快照',
-              onClick: () => { if (snaps.length > 0) openSnapshot(snaps[0].url) },
+              className: 'dshmw-hit-preview',
+              role: primary ? 'button' : undefined,
+              tabIndex: primary ? 0 : undefined,
+              title: primary ? '点击打开完整页面' : '该次归档无快照',
+              onClick: () => { if (primary) openSnapshot(primary.url) },
+              onKeyDown: (ev) => { if (primary && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); openSnapshot(primary.url) } },
             },
-              React.createElement('span', { className: 'dshmw-hit-date', title: e.archivedAt || '' }, fmtDateTime(e.archivedAt)),
-              React.createElement('span', { className: 'dshmw-hit-batch', title: e.batchId }, e.batchName || e.batchId),
-              React.createElement('span', { className: 'dshmw-hit-sess', title: '会话 ' + e.sessionId }, String(e.sessionId || '').slice(0, 12)),
-              React.createElement('span', { className: 'dshmw-hit-links' },
+              primary
+                ? React.createElement('iframe', { src: primary.url, title: '归档页面预览：' + primary.label, loading: 'lazy', tabIndex: -1 })
+                : React.createElement('div', { className: 'dshmw-hit-preview-empty' },
+                    React.createElement('span', { className: 'dshmw-hit-preview-icon' }, '◇'),
+                    React.createElement('span', null, '本次归档没有页面快照')),
+              primary ? React.createElement('span', { className: 'dshmw-hit-preview-badge' }, '点击查看完整页面') : null),
+            React.createElement('div', { className: 'dshmw-hit-cardbody' },
+              React.createElement('div', { className: 'dshmw-hit-cardtop' },
+                React.createElement('span', { className: 'dshmw-hit-cardtitle', title: e.batchId }, e.batchName || e.batchId),
+                React.createElement('span', { className: 'dshmw-hit-links' },
                 snaps.length
                   ? snaps.map((s) => React.createElement('button', {
                       key: s.label,
@@ -1723,7 +1772,23 @@ return {
                   className: 'dshmw-iter-link',
                   title: '右栏全屏展示该会话的执行轨迹',
                   onClick: (ev) => { ev.stopPropagation(); openTrajectory(e.sessionId) },
-                }, '轨迹'))))
+                }, '轨迹'),
+                !primary ? React.createElement('button', {
+                  type: 'button',
+                  className: confirmingDelete ? 'dshmw-iter-link dshmw-iter-link-danger' : 'dshmw-iter-link',
+                  title: confirmingDelete ? '再次点击确认删除这条无快照归档' : '删除这条无快照归档记录',
+                  onClick: (ev) => {
+                    ev.stopPropagation()
+                    if (!confirmingDelete) { setConfirmDeleteArchiveId(archiveKey); return }
+                    deleteIteration(e.archiveId).then(() => {
+                      setConfirmDeleteArchiveId(null)
+                      setIterations((items) => items.filter((item) => item.archiveId !== e.archiveId))
+                    }).catch((err) => showCtxToast('删除失败：' + errMsg(err)))
+                  },
+                }, confirmingDelete ? '确认删除' : '删除') : null)),
+              React.createElement('div', { className: 'dshmw-hit-cardmeta' },
+                React.createElement('span', { className: 'dshmw-hit-date', title: e.archivedAt || '' }, fmtDateTime(e.archivedAt)),
+                React.createElement('span', { className: 'dshmw-hit-sess', title: '会话 ' + e.sessionId }, String(e.sessionId || '').slice(0, 12)))))
         })
         rightBody = [
           React.createElement('div', { key: 'head', className: 'dshmw-case-detailhead' },

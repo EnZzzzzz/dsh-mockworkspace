@@ -338,23 +338,32 @@ export function apply(ctx) {
             const archiveDir = pathJoin(pathJoin(archivesRoot, batchId), ts)
             await fsmkdir(archiveDir, { recursive: true })
 
-            // 扫描产物根（与 Hub 检出规则一致：dist/index.html 优先，其次 index.html）。
+            // 扫描产物根。HTML 入口优先 index.html，否则取字典序首个 .html。
             const found = []
             const walk = async (dir, depth) => {
               if (depth > 3) return
               let entries
               try { entries = await fsReaddir(dir, { withFileTypes: true }) } catch (err) { return }
-              const files = new Set(entries.filter((e) => e.isFile()).map((e) => e.name))
+              const files = entries.filter((e) => e.isFile()).map((e) => e.name)
+              const htmlEntry = (names) => {
+                const html = names.filter((name) => /\.html?$/i.test(name)).sort()
+                return html.includes('index.html') ? 'index.html' : (html[0] || '')
+              }
               const dirs = entries.filter((e) => e.isDirectory())
               for (const d of dirs) {
                 if (d.name !== 'dist') continue
-                if (existsSync(pathJoin(dir, 'dist', 'index.html'))) {
-                  found.push({ name: basename(dir) || 'dist', kind: 'dist', root: pathJoin(dir, 'dist') })
+                const distRoot = pathJoin(dir, 'dist')
+                let distEntries
+                try { distEntries = await fsReaddir(distRoot, { withFileTypes: true }) } catch (err) { distEntries = [] }
+                const entryFile = htmlEntry(distEntries.filter((e) => e.isFile()).map((e) => e.name))
+                if (entryFile !== '') {
+                  found.push({ name: basename(dir) || 'dist', kind: 'dist', root: distRoot, entryFile })
                   return
                 }
               }
-              if (files.has('index.html')) {
-                found.push({ name: basename(dir) || 'site', kind: 'static', root: dir })
+              const entryFile = htmlEntry(files)
+              if (entryFile !== '') {
+                found.push({ name: basename(dir) || 'site', kind: 'static', root: dir, entryFile })
                 return
               }
               for (const d of dirs) {
@@ -372,7 +381,7 @@ export function apply(ctx) {
                 recursive: true,
                 filter: (src) => !src.split(pathSep).some((p) => ARCHIVE_SKIP_DIRS.has(p)),
               })
-              snapshots.push({ name: a.name, kind: a.kind, snapshotDir: snapName })
+              snapshots.push({ name: a.name, kind: a.kind, snapshotDir: snapName, entryFile: a.entryFile })
             }
 
             const record = {
