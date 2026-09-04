@@ -188,6 +188,14 @@ return {
 .dshmw-artimg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top center;border:0;display:block;background:#fff}
 .dshmw-artplaceholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary,#8a919d);opacity:.6}
 .dshmw-artmeta{display:flex;align-items:center;gap:6px;padding:4px 6px;min-width:0;font-size:11px}
+.dshmw-artfilter{display:flex;gap:6px;padding:2px 6px 6px}
+.dshmw-artfilter .dshmw-select{flex:1;min-width:0}
+.dshmw-artpop{position:fixed;z-index:80;width:230px;box-sizing:border-box;pointer-events:none;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:8px 10px;box-shadow:0 6px 24px rgba(0,0,0,.18);color:var(--dsw-alias-label-secondary);font-size:11px;line-height:16px;text-align:left}
+.dshmw-artpopname{font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.dshmw-artpoprow{display:flex;gap:6px;margin-top:3px;min-width:0}
+.dshmw-artpopk{flex:none;color:var(--dsw-alias-label-tertiary,#8a919d)}
+.dshmw-artpopv{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--dsw-alias-label-primary)}
+.dshmw-artpophint{margin-top:5px;color:var(--dsw-alias-label-tertiary,#8a919d)}
 .dshmw-artname{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .dshmw-kind{flex:none;border-radius:4px;padding:0 5px;font-size:10px;line-height:15px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .dshmw-dot{flex:none;width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-label-tertiary,#9aa0a6)}
@@ -365,6 +373,36 @@ return {
     const deleteBatch = (path) => callHost('mock.delete-batch', { path })
     const getConfig = () => callHost('mock.get-config')
     const setConfig = (root) => callHost('mock.set-config', { root })
+    const setBatchGen = (path, gen) => callHost('mock.set-gen', { path, gen })
+
+    // 记录批次生成参数（尽力而为，失败静默）：Agent 模式取 session.create
+    // 返回的 agentPreset；模型取 Host 当前默认（host.describe 的 model）。
+    // 只记拿到的字段，任一缺失不阻断。产物级精确值可用 artifact.json 的
+    // gen 字段覆盖批次默认。
+    function recordBatchGen(batchPath, agentPreset) {
+      const gen = {}
+      if (typeof agentPreset === 'string' && agentPreset !== '') gen.agent = agentPreset
+      const flush = () => {
+        if (Object.keys(gen).length > 0) setBatchGen(batchPath, gen).catch(() => {})
+      }
+      // 预设版本不是 dsh 的一等字段（agentPreset.list/read 均无 version）；
+      // dsh-design-harness 的 sync.py 约定会把
+      // `# preset version: X | git: Y (branch: Z)` 写进部署文件
+      // agent.cordis.yml 头部，尽力解析，无此约定则跳过。
+      const readPresetVersion = gen.agent === undefined
+        ? Promise.resolve()
+        : apiCall('agentPreset.read', { agentPreset: gen.agent }).then((p) => {
+            const head = p && typeof p.content === 'string' ? p.content.slice(0, 600) : ''
+            const m = head.match(/^#\s*preset version:\s*([^\s|]+)\s*(?:\|\s*git:\s*([^\s(]+))?/m)
+            if (m !== null) gen.agentVersion = m[1] + (m[2] ? ' · ' + m[2] : '')
+          }).catch(() => {})
+      Promise.all([
+        apiCall('host.describe', {}).then((d) => {
+          if (d && typeof d.model === 'string' && d.model !== '') gen.model = d.model
+        }).catch(() => {}),
+        readPresetVersion,
+      ]).then(flush)
+    }
 
     // ---- artifact-hub 直连 API（Hub 带 CORS * 头，面板直接读写用例） ----
     function hubApi(pathname, opts) {
@@ -524,6 +562,7 @@ return {
           mockSessionIds.add(sessionId)
           openSession(sessionId)
         }
+        recordBatchGen(batchPath, value && value.agentPreset)
         return sessionId
       })
     }
@@ -1632,6 +1671,9 @@ return {
       // 产物点击的本地态：artPending 启动中（防重复点击），artError 启动失败原因。
       const [artPending, setArtPending] = React.useState({})
       const [artError, setArtError] = React.useState({})
+      // 生成参数筛选（模型 / Agent）与悬浮窗锚点（卡片矩形，fixed 定位用）。
+      const [artFilter, setArtFilter] = React.useState({ model: '', agent: '' })
+      const [artPop, setArtPop] = React.useState(null)
       // 点产物卡片：有 URL 直接打开；无 URL（未运行的 dev 产物）交给 Hub 启动
       // （install + dev server，Hub 同步等就绪），拿到 runtime.url 后打开。
       const openArtifact = (a) => {
@@ -1670,12 +1712,41 @@ return {
           hubBody.push(React.createElement('div', { key: 'none', className: 'dshmw-hint', style: { padding: '0 6px 6px', marginTop: 0 } },
             'runs/ 下未扫描到产物（index.html / package.json / artifact.json）'))
         } else {
+          // 生成参数：Hub 已合并产物级 artifact.json gen 与批次 meta.gen。
+          const artGenOf = (a) => (a && a.gen && typeof a.gen === 'object' ? a.gen : {})
+          const allArts = hubBatches.flatMap((b) => b.artifacts || [])
+          const genValues = (key) => [...new Set(allArts.map((a) => artGenOf(a)[key])
+            .filter((v) => typeof v === 'string' && v !== ''))].sort()
+          const modelOptions = genValues('model')
+          const agentOptions = genValues('agent')
+          const artFiltering = artFilter.model !== '' || artFilter.agent !== ''
+          const matchArt = (a) => {
+            const g = artGenOf(a)
+            if (artFilter.model !== '' && g.model !== artFilter.model) return false
+            if (artFilter.agent !== '' && g.agent !== artFilter.agent) return false
+            return true
+          }
+          // 筛选条：只在有产物记录过生成参数时出现；未记录的产物在任何
+          // 具体筛选值下都不匹配。
+          if (modelOptions.length + agentOptions.length > 0) {
+            const filterSelect = (key, options, placeholder) =>
+              React.createElement('select', {
+                className: 'dshmw-select',
+                value: artFilter[key],
+                title: placeholder,
+                onChange: (e) => setArtFilter((prev) => ({ ...prev, [key]: e.target.value })),
+              }, [React.createElement('option', { key: '', value: '' }, placeholder)].concat(
+                options.map((v) => React.createElement('option', { key: v, value: v }, v))))
+            hubBody.push(React.createElement('div', { key: 'artfilter', className: 'dshmw-artfilter' },
+              modelOptions.length > 0 ? filterSelect('model', modelOptions, '全部模型') : null,
+              agentOptions.length > 0 ? filterSelect('agent', agentOptions, '全部 Agent') : null))
+          }
           // 相同用例的产物合并成一组：按批次 meta 的 caseSetId+sourceRef/caseId
           // （缺失退回批次名）归并；组标题可点击折叠/展开。
           const artGroups = []
           const artGroupIndex = new Map()
           hubBatches.forEach((b) => {
-            const arts = b.artifacts || []
+            const arts = (b.artifacts || []).filter((a) => !artFiltering || matchArt(a))
             if (arts.length === 0) return
             const m = (arts[0] && arts[0].meta) || {}
             const key = (m.caseSetId || m.caseId)
@@ -1689,6 +1760,10 @@ return {
             }
             arts.forEach((a) => g.arts.push(a))
           })
+          if (artGroups.length === 0) {
+            hubBody.push(React.createElement('div', { key: 'nomatch', className: 'dshmw-hint', style: { padding: '0 6px 6px', marginTop: 0 } },
+              '没有符合筛选条件的产物'))
+          }
           artGroups.forEach((g) => {
             const closed = collapsedArts[g.key] === true
             hubBody.push(React.createElement('button', {
@@ -1717,11 +1792,11 @@ return {
                   key: a.id,
                   type: 'button',
                   className: 'dshmw-artcard',
-                  title: a.id
-                    + (a.runtime && a.runtime.url ? '\n' + a.runtime.url : '')
-                    + (pending ? '\n正在启动…' : '')
-                    + (err ? '\n启动失败：' + err : '')
-                    + (url === '' && !pending && !err ? '\n点击启动并打开' : ''),
+                  onMouseEnter: (e) => {
+                    const r = e.currentTarget.getBoundingClientRect()
+                    setArtPop({ id: a.id, left: r.left, top: r.top, width: r.width, height: r.height })
+                  },
+                  onMouseLeave: () => setArtPop((prev) => (prev !== null && prev.id === a.id ? null : prev)),
                   onClick: () => openArtifact(a),
                 },
                   React.createElement('div', { className: 'dshmw-artthumb' },
@@ -1732,6 +1807,40 @@ return {
                     React.createElement('span', { className: 'dshmw-kind' }, a.kind)))
                 })))
           })
+          // 生成参数悬浮窗：fixed 定位（卡片 overflow:hidden 会裁剪内部绝对
+          // 定位元素），pointer-events:none 随鼠标移出即消失。
+          if (artPop !== null) {
+            const pa = allArts.find((x) => x.id === artPop.id)
+            if (pa) {
+              const pgen = artGenOf(pa)
+              const purl = artifactUrl(pa)
+              const ppending = artPending[pa.id] === true
+              const perr = artError[pa.id]
+              const popRow = (k, v) => React.createElement('div', { key: k, className: 'dshmw-artpoprow' },
+                React.createElement('span', { className: 'dshmw-artpopk' }, k),
+                React.createElement('span', { className: 'dshmw-artpopv', title: v }, v))
+              const vw = typeof window !== 'undefined' ? window.innerWidth : 1200
+              const vh = typeof window !== 'undefined' ? window.innerHeight : 800
+              // 优先放卡片右侧；右侧空间不足（面板贴右边缘）时翻到左侧。
+              // 垂直方向顶对齐卡片，底边不出视口。
+              const popStyle = { top: Math.max(8, Math.min(artPop.top, vh - 170)) }
+              if (artPop.left + artPop.width + 6 + 230 <= vw - 8) popStyle.left = artPop.left + artPop.width + 6
+              else popStyle.left = Math.max(8, artPop.left - 236)
+              hubBody.push(React.createElement('div', { key: 'artpop', className: 'dshmw-artpop', style: popStyle },
+                React.createElement('div', { className: 'dshmw-artpopname' }, pa.name || pa.id),
+                popRow('模型', typeof pgen.model === 'string' && pgen.model !== '' ? pgen.model : '未记录'),
+                popRow('Agent', typeof pgen.agent === 'string' && pgen.agent !== '' ? pgen.agent : '未记录'),
+                typeof pgen.agentVersion === 'string' && pgen.agentVersion !== ''
+                  ? popRow('Agent 版本', pgen.agentVersion) : null,
+                popRow('类型', String(pa.kind || '')),
+                pa.runtime && pa.runtime.url ? popRow('地址', String(pa.runtime.url)) : null,
+                React.createElement('div', { className: 'dshmw-artpophint' },
+                  ppending ? '正在启动…'
+                    : perr ? '启动失败：' + perr
+                    : purl === '' ? '点击启动并打开'
+                    : pa.id)))
+            }
+          }
         }
       }
 

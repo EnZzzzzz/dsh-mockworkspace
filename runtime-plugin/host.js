@@ -2,7 +2,8 @@
 // 临时实验场（mock workspace）的批次管理。每个「批次 batch」= mock 根下
 // runs/<batchId>/ 一个真实目录：
 //   - 目录由本插件用 `shell` 跑 `mkdir -p` 创建（fs 服务没有 mkdir）
-//   - meta.json 记录 { batchId, name, createdAt, status }
+//   - meta.json 记录 { batchId, name, createdAt, status, gen? }
+//     （gen = 生成参数 { model, agent, agentVersion? }，面板悬浮窗展示与筛选用）
 //   - 目录注册为正式 workspace（workspaceRegistry.create），会话 cwd 指向
 //     批次目录时自动归组（sessionIds 由 canonical-cwd 索引提供）
 //   - 轨迹 = DSH 会话日志（打开会话即达）；产物 = 会话在批次目录里生成的文件
@@ -109,6 +110,15 @@ return {
     // ---- 批次元数据（meta.json 读写） ----
     function metaPath(batchDir) {
       return joinPath(batchDir, 'meta.json')
+    }
+    // 生成参数（gen）：只保留 model / agent / agentVersion 字符串叶子，其余键丢弃。
+    function sanitizeGen(raw) {
+      if (!raw || typeof raw !== 'object') return null
+      const gen = {}
+      if (typeof raw.model === 'string' && raw.model !== '') gen.model = raw.model
+      if (typeof raw.agent === 'string' && raw.agent !== '') gen.agent = raw.agent
+      if (typeof raw.agentVersion === 'string' && raw.agentVersion !== '') gen.agentVersion = raw.agentVersion
+      return Object.keys(gen).length > 0 ? gen : null
     }
     async function writeMeta(batchDir, meta) {
       if (fs === undefined) throw new Error('fs 服务不可用')
@@ -239,11 +249,32 @@ return {
         if (args && typeof args.caseSetId === 'string' && args.caseSetId !== '') meta.caseSetId = args.caseSetId
         if (args && typeof args.sourceRef === 'string' && args.sourceRef !== '') meta.sourceRef = args.sourceRef
         if (args && typeof args.promptHash === 'string' && args.promptHash !== '') meta.promptHash = args.promptHash
+        // 可选：生成参数（模型 / Agent 模式）
+        const gen = sanitizeGen(args && args.gen)
+        if (gen !== null) meta.gen = gen
         await writeMeta(batchPath, meta)
 
         // 不注册 workspace：会话由后端 session.create({ cwd }) 创建，cwd 指向
         // 批次目录但没有 workspace 归属，默认会话面板把它们归入「未分组」。
         return { ok: true, batchId, batchPath, meta }
+      } catch (err) {
+        return { ok: false, error: errorText(err) }
+      }
+    })
+
+    // ---- RPC：记录批次生成参数（合并进 meta.gen，仅 model/agent 字符串） ----
+    // args: { path, gen: { model?, agent? } }。同键覆盖，缺失键保留旧值。
+    harness.handle('mock.set-gen', async (args) => {
+      try {
+        const path = args && typeof args.path === 'string' ? args.path : ''
+        if (!insideMockRoot(path)) return { ok: false, error: '路径不在 mock 工作区内' }
+        const gen = sanitizeGen(args && args.gen)
+        if (gen === null) return { ok: false, error: '无有效生成参数' }
+        const meta = await readMeta(path)
+        if (meta === null) return { ok: false, error: '未找到批次元数据' }
+        meta.gen = Object.assign({}, meta.gen && typeof meta.gen === 'object' ? meta.gen : {}, gen)
+        await writeMeta(path, meta)
+        return { ok: true, meta }
       } catch (err) {
         return { ok: false, error: errorText(err) }
       }
@@ -495,6 +526,8 @@ return {
         artifacts: snapshots,
         builds,
       }
+      // 生成参数随记录冻结，归档时间线/产物悬浮窗可回溯当时的模型与 Agent。
+      if (meta.gen && typeof meta.gen === 'object') record.gen = meta.gen
       if (extra && typeof extra === 'object') Object.assign(record, extra)
       const recordTarget = await resolveTarget(joinPath(archiveDir, 'record.json'))
       await fs.writeText(recordTarget, JSON.stringify(record, null, 2))

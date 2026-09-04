@@ -126,8 +126,9 @@ function safeRelPath(segments) {
 // ---------------------------------------------------------------- 产物扫描
 
 /**
- * 返回 [{ id, batchId, batchName, name, kind, relDir, absDir, entry, command, meta }]
+ * 返回 [{ id, batchId, batchName, name, kind, relDir, absDir, entry, command, gen, meta }]
  * id = 相对 runs/ 的 posix 路径（含批次目录），保证跨批次唯一。
+ * gen 为产物级生成参数（artifact.json 声明，可能为空）；meta 为批次 meta.json。
  */
 async function scanArtifacts() {
   const artifacts = []
@@ -163,6 +164,8 @@ async function scanArtifacts() {
           kind: decl.kind === 'command' ? 'command' : 'static',
           command: typeof decl.command === 'string' ? decl.command : undefined,
           readyPath: typeof decl.readyPath === 'string' ? decl.readyPath : '/',
+          // 产物级生成参数（artifact.json 的 gen: { model, agent }），覆盖批次默认
+          gen: decl.gen && typeof decl.gen === 'object' ? decl.gen : undefined,
         }
       } else if (hasNodeScripts) {
         detected = {
@@ -186,6 +189,8 @@ async function scanArtifacts() {
           absDir: dir,
           command: detected.command,
           readyPath: detected.readyPath || '/',
+          gen: detected.gen,
+          meta,
           hasLock: names.has('package-lock.json') || names.has('pnpm-lock.yaml') || names.has('yarn.lock'),
           deps: detected.pkg ? Object.keys({ ...detected.pkg.dependencies, ...detected.pkg.devDependencies }) : [],
           scripts: pkgScripts ? Object.keys(pkgScripts) : [],
@@ -1436,10 +1441,21 @@ async function apiState() {
   const batches = new Map()
   for (const a of items) {
     if (!batches.has(a.batchId)) batches.set(a.batchId, { batchId: a.batchId, name: a.batchName, artifacts: [] })
+    // 生成参数（悬浮窗展示与筛选用）：产物级 artifact.json gen 覆盖批次 meta.gen 默认，
+    // 只保留 model / agent / agentVersion 字符串叶子。
+    const batchGen = a.meta && a.meta.gen && typeof a.meta.gen === 'object' ? a.meta.gen : {}
+    const artGen = a.gen && typeof a.gen === 'object' ? a.gen : {}
+    const gen = {}
+    for (const k of ['model', 'agent', 'agentVersion']) {
+      const v = typeof artGen[k] === 'string' && artGen[k] !== '' ? artGen[k]
+        : (typeof batchGen[k] === 'string' ? batchGen[k] : '')
+      if (v !== '') gen[k] = v
+    }
     batches.get(a.batchId).artifacts.push({
       ...a,
       absDir: undefined,
       pkg: undefined,
+      gen,
       runtime: runtimeView(a.id, a),
       archiveUrl: (snapByBatch.get(a.batchId) || {}).url || null,
       thumbUrl: (snapByBatch.get(a.batchId) || {}).thumb || null,

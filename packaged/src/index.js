@@ -205,6 +205,15 @@ export function apply(ctx) {
   function metaPath(batchDir) {
     return joinPath(batchDir, 'meta.json')
   }
+  // 生成参数（gen）：只保留 model / agent 字符串叶子，其余键丢弃。
+  function sanitizeGen(raw) {
+    if (!raw || typeof raw !== 'object') return null
+    const gen = {}
+    if (typeof raw.model === 'string' && raw.model !== '') gen.model = raw.model
+    if (typeof raw.agent === 'string' && raw.agent !== '') gen.agent = raw.agent
+    if (typeof raw.agentVersion === 'string' && raw.agentVersion !== '') gen.agentVersion = raw.agentVersion
+    return Object.keys(gen).length > 0 ? gen : null
+  }
   async function writeMeta(batchDir, meta) {
     const fs = ctx.get('fs')
     if (fs === undefined) throw new Error('fs 服务不可用')
@@ -354,6 +363,8 @@ export function apply(ctx) {
       artifacts: snapshots,
       builds,
     }
+    // 生成参数随记录冻结，归档时间线/产物悬浮窗可回溯当时的模型与 Agent。
+    if (meta.gen && typeof meta.gen === 'object') record.gen = meta.gen
     if (extra && typeof extra === 'object') Object.assign(record, extra)
     await fswriteFile(pathJoin(archiveDir, 'record.json'), JSON.stringify(record, null, 2), 'utf8')
     return { ok: true, record }
@@ -414,11 +425,27 @@ export function apply(ctx) {
             if (typeof args.caseSetId === 'string' && args.caseSetId !== '') meta.caseSetId = args.caseSetId
             if (typeof args.sourceRef === 'string' && args.sourceRef !== '') meta.sourceRef = args.sourceRef
             if (typeof args.promptHash === 'string' && args.promptHash !== '') meta.promptHash = args.promptHash
+            // 可选：生成参数（模型 / Agent 模式）
+            const gen = sanitizeGen(args.gen)
+            if (gen !== null) meta.gen = gen
             await writeMeta(batchPath, meta)
 
             // 不注册 workspace：会话由后端 session.create({ cwd }) 创建，cwd 指向
             // 批次目录但没有 workspace 归属，默认会话面板把它们归入「未分组」。
             return { ok: true, batchId, batchPath, meta }
+          }
+          case 'set-gen': {
+            // 记录批次生成参数（合并进 meta.gen，仅 model/agent 字符串）。
+            // 同键覆盖，缺失键保留旧值。
+            const path = typeof args.path === 'string' ? args.path : ''
+            if (!insideMockRoot(path)) return { ok: false, error: '路径不在 mock 工作区内' }
+            const gen = sanitizeGen(args.gen)
+            if (gen === null) return { ok: false, error: '无有效生成参数' }
+            const meta = await readMeta(path)
+            if (meta === null) return { ok: false, error: '未找到批次元数据' }
+            meta.gen = Object.assign({}, meta.gen && typeof meta.gen === 'object' ? meta.gen : {}, gen)
+            await writeMeta(path, meta)
+            return { ok: true, meta }
           }
           case 'list-batches': {
             const runs = joinPath(mockRoot(), 'runs')
