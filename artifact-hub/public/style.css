@@ -340,6 +340,25 @@ body {
   color: var(--green);
   white-space: nowrap;
 }
+.iter-badge-snap {
+  flex: none;
+  font-size: 10px;
+  line-height: 16px;
+  padding: 0 6px;
+  border-radius: 4px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  white-space: nowrap;
+}
+.iter-note {
+  flex: none;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--dim);
+}
 
 ::-webkit-scrollbar { width: 9px; height: 9px; }
 ::-webkit-scrollbar-thumb { background: #33384200; border-radius: 5px; }

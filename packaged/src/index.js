@@ -11,6 +11,7 @@
  *   - create-batch：mkdir + meta.json + workspaceRegistry.create
  *   - list-batches：runs 下各批次 meta.json + workspace 关联
  *   - archive-batch / delete-batch / list-directory
+ *   - archive-session / snapshot-session：会话归档与会话中途快照（产物快照 + record.json）
  *
  * 服务均为可选读取（ctx.get + undefined 检查）；mkdir/rm 走 shell 服务，
  * 元数据读写走 fs 服务，注册走 workspaceRegistry。所有目录操作限 mock 根内。
@@ -268,6 +269,96 @@ export function apply(ctx) {
     }
   }
 
+  // ---- 归档/快照共用管线：扫批次目录产物 → 快照复制到
+  // <mock根>/case-library/archives/<batchId>/<ts>/ → 写 record.json。
+  // extra 合并进 record：归档传 { kind:'archive' }；快照传
+  // { kind:'snapshot', sourceSessionId, note }（轨迹由 Client fork 冻结，
+  // 本管线只冻结产物与记录；fork 不冻结文件，故产物必须此刻复制）。
+  async function writeSessionArchive(sessionId, batchPath, extra) {
+    const meta = await readMeta(batchPath)
+    if (meta === null) return { ok: false, error: '未找到批次元数据' }
+
+    const batchId = (meta && meta.batchId) || basename(batchPath)
+    const now = new Date()
+    const pad = (n, w) => String(n).padStart(w, '0')
+    const ts = pad(now.getFullYear(), 4) + pad(now.getMonth() + 1, 2) + pad(now.getDate(), 2)
+      + '-' + pad(now.getHours(), 2) + pad(now.getMinutes(), 2) + pad(now.getSeconds(), 2)
+    const archivesRoot = pathJoin(pathJoin(mockRoot(), 'case-library'), 'archives')
+    const archiveDir = pathJoin(pathJoin(archivesRoot, batchId), ts)
+    await fsmkdir(archiveDir, { recursive: true })
+
+    // 扫描产物根。HTML 入口优先 index.html，否则取字典序首个 .html。
+    // 构建产物目录认 dist/（Vite 等）与 out/（Next.js output:'export'）。
+    const found = []
+    const walk = async (dir, depth) => {
+      if (depth > 3) return
+      let entries
+      try { entries = await fsReaddir(dir, { withFileTypes: true }) } catch (err) { return }
+      const files = entries.filter((e) => e.isFile()).map((e) => e.name)
+      const htmlEntry = (names) => {
+        const html = names.filter((name) => /\.html?$/i.test(name)).sort()
+        return html.includes('index.html') ? 'index.html' : (html[0] || '')
+      }
+      const dirs = entries.filter((e) => e.isDirectory())
+      for (const d of dirs) {
+        if (d.name !== 'dist' && d.name !== 'out') continue
+        const distRoot = pathJoin(dir, d.name)
+        let distEntries
+        try { distEntries = await fsReaddir(distRoot, { withFileTypes: true }) } catch (err) { distEntries = [] }
+        const entryFile = htmlEntry(distEntries.filter((e) => e.isFile()).map((e) => e.name))
+        if (entryFile !== '') {
+          found.push({ name: basename(dir) || 'dist', kind: 'dist', root: distRoot, entryFile })
+          return
+        }
+      }
+      const entryFile = htmlEntry(files)
+      if (entryFile !== '') {
+        found.push({ name: basename(dir) || 'site', kind: 'static', root: dir, entryFile })
+        return
+      }
+      for (const d of dirs) {
+        if (ARCHIVE_SKIP_DIRS.has(d.name)) continue
+        await walk(pathJoin(dir, d.name), depth + 1)
+      }
+    }
+    await walk(batchPath, 0)
+    // 扫描无果：可能是未构建的前端项目（无 index.html / dist），自动 install + build 后重扫。
+    const builds = []
+    if (found.length === 0) {
+      for (const dir of await findBuildProjects(batchPath)) {
+        builds.push(await buildProject(dir))
+      }
+      if (builds.some((b) => b.ok)) await walk(batchPath, 0)
+    }
+
+    const snapshots = []
+    for (const a of found) {
+      const snapName = a.kind === 'dist' ? safeSnapName(a.name) + '-dist' : safeSnapName(a.name) + '-site'
+      const dest = pathJoin(archiveDir, snapName)
+      await fscp(a.root, dest, {
+        recursive: true,
+        filter: (src) => !src.split(pathSep).some((p) => ARCHIVE_SKIP_DIRS.has(p)),
+      })
+      snapshots.push({ name: a.name, kind: a.kind, snapshotDir: snapName, entryFile: a.entryFile })
+    }
+
+    const record = {
+      archiveId: batchId + '/' + ts,
+      batchId,
+      batchName: (meta && meta.name) || batchId,
+      sessionId,
+      caseId: (meta && meta.caseId) || '',
+      caseSetId: (meta && meta.caseSetId) || '',
+      promptHash: (meta && meta.promptHash) || '',
+      archivedAt: now.toISOString(),
+      artifacts: snapshots,
+      builds,
+    }
+    if (extra && typeof extra === 'object') Object.assign(record, extra)
+    await fswriteFile(pathJoin(archiveDir, 'record.json'), JSON.stringify(record, null, 2), 'utf8')
+    return { ok: true, record }
+  }
+
   // ---- RPC 通道 ----
   ctx.inject(['connection'], (apiCtx) => {
     return apiCtx.connection.rpc.handle('/mock', async (endpoint, payload, _signal) => {
@@ -382,92 +473,31 @@ export function apply(ctx) {
             return { ok: true, path, meta }
           }
           case 'archive-session': {
-            // 归档会话：产物快照 + 会话记录（供 Hub「用例迭代」时间线）。
+            // 归档会话（终点归档）：产物快照 + 会话记录（供 Hub「用例迭代」时间线）。
+            // 会话隐藏由 Client workspaces.archiveSession 做。
             const sessionId = typeof args.sessionId === 'string' ? args.sessionId : ''
             const batchPath = typeof args.batchPath === 'string' ? args.batchPath : ''
             if (sessionId === '' || batchPath === '') return { ok: false, error: '缺 sessionId / batchPath' }
             if (!insideMockRoot(batchPath)) return { ok: false, error: '路径不在 mock 工作区内' }
-            const meta = await readMeta(batchPath)
-            if (meta === null) return { ok: false, error: '未找到批次元数据' }
-
-            const batchId = (meta && meta.batchId) || basename(batchPath)
-            const now = new Date()
-            const pad = (n, w) => String(n).padStart(w, '0')
-            const ts = pad(now.getFullYear(), 4) + pad(now.getMonth() + 1, 2) + pad(now.getDate(), 2)
-              + '-' + pad(now.getHours(), 2) + pad(now.getMinutes(), 2) + pad(now.getSeconds(), 2)
-            const archivesRoot = pathJoin(pathJoin(mockRoot(), 'case-library'), 'archives')
-            const archiveDir = pathJoin(pathJoin(archivesRoot, batchId), ts)
-            await fsmkdir(archiveDir, { recursive: true })
-
-            // 扫描产物根。HTML 入口优先 index.html，否则取字典序首个 .html。
-            // 构建产物目录认 dist/（Vite 等）与 out/（Next.js output:'export'）。
-            const found = []
-            const walk = async (dir, depth) => {
-              if (depth > 3) return
-              let entries
-              try { entries = await fsReaddir(dir, { withFileTypes: true }) } catch (err) { return }
-              const files = entries.filter((e) => e.isFile()).map((e) => e.name)
-              const htmlEntry = (names) => {
-                const html = names.filter((name) => /\.html?$/i.test(name)).sort()
-                return html.includes('index.html') ? 'index.html' : (html[0] || '')
-              }
-              const dirs = entries.filter((e) => e.isDirectory())
-              for (const d of dirs) {
-                if (d.name !== 'dist' && d.name !== 'out') continue
-                const distRoot = pathJoin(dir, d.name)
-                let distEntries
-                try { distEntries = await fsReaddir(distRoot, { withFileTypes: true }) } catch (err) { distEntries = [] }
-                const entryFile = htmlEntry(distEntries.filter((e) => e.isFile()).map((e) => e.name))
-                if (entryFile !== '') {
-                  found.push({ name: basename(dir) || 'dist', kind: 'dist', root: distRoot, entryFile })
-                  return
-                }
-              }
-              const entryFile = htmlEntry(files)
-              if (entryFile !== '') {
-                found.push({ name: basename(dir) || 'site', kind: 'static', root: dir, entryFile })
-                return
-              }
-              for (const d of dirs) {
-                if (ARCHIVE_SKIP_DIRS.has(d.name)) continue
-                await walk(pathJoin(dir, d.name), depth + 1)
-              }
+            return await writeSessionArchive(sessionId, batchPath, { kind: 'archive' })
+          }
+          case 'snapshot-session': {
+            // 会话快照（会话中途冻结当前效果）：sessionId 是 Client fork 出的
+            // 快照会话（轨迹冻结副本）；本端点只复制产物快照 + 写 record.json。
+            // 原会话不归档、不受打扰，可继续对话。
+            const sessionId = typeof args.sessionId === 'string' ? args.sessionId : ''
+            const sourceSessionId = typeof args.sourceSessionId === 'string' ? args.sourceSessionId : ''
+            const batchPath = typeof args.batchPath === 'string' ? args.batchPath : ''
+            const note = typeof args.note === 'string' ? args.note.trim() : ''
+            if (sessionId === '' || sourceSessionId === '' || batchPath === '') {
+              return { ok: false, error: '缺 sessionId / sourceSessionId / batchPath' }
             }
-            await walk(batchPath, 0)
-            // 扫描无果：可能是未构建的前端项目（无 index.html / dist），自动 install + build 后重扫。
-            const builds = []
-            if (found.length === 0) {
-              for (const dir of await findBuildProjects(batchPath)) {
-                builds.push(await buildProject(dir))
-              }
-              if (builds.some((b) => b.ok)) await walk(batchPath, 0)
-            }
-
-            const snapshots = []
-            for (const a of found) {
-              const snapName = a.kind === 'dist' ? safeSnapName(a.name) + '-dist' : safeSnapName(a.name) + '-site'
-              const dest = pathJoin(archiveDir, snapName)
-              await fscp(a.root, dest, {
-                recursive: true,
-                filter: (src) => !src.split(pathSep).some((p) => ARCHIVE_SKIP_DIRS.has(p)),
-              })
-              snapshots.push({ name: a.name, kind: a.kind, snapshotDir: snapName, entryFile: a.entryFile })
-            }
-
-            const record = {
-              archiveId: batchId + '/' + ts,
-              batchId,
-              batchName: (meta && meta.name) || batchId,
-              sessionId,
-              caseId: (meta && meta.caseId) || '',
-              caseSetId: (meta && meta.caseSetId) || '',
-              promptHash: (meta && meta.promptHash) || '',
-              archivedAt: now.toISOString(),
-              artifacts: snapshots,
-              builds,
-            }
-            await fswriteFile(pathJoin(archiveDir, 'record.json'), JSON.stringify(record, null, 2), 'utf8')
-            return { ok: true, record }
+            if (!insideMockRoot(batchPath)) return { ok: false, error: '路径不在 mock 工作区内' }
+            return await writeSessionArchive(sessionId, batchPath, {
+              kind: 'snapshot',
+              sourceSessionId,
+              note,
+            })
           }
           case 'delete-batch': {
             const path = typeof args.path === 'string' ? args.path : ''

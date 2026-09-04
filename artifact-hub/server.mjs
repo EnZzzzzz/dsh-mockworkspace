@@ -249,6 +249,10 @@ async function scanArchives() {
         promptHash: typeof rec.promptHash === 'string' ? rec.promptHash : '',
         archivedAt: typeof rec.archivedAt === 'string' ? rec.archivedAt : '',
         artifacts: Array.isArray(rec.artifacts) ? rec.artifacts : [],
+        // 会话快照记录（kind:'snapshot'）：快照会话由 fork 冻结轨迹，note 是用户备注
+        kind: rec.kind === 'snapshot' ? 'snapshot' : 'archive',
+        sourceSessionId: typeof rec.sourceSessionId === 'string' ? rec.sourceSessionId : '',
+        note: typeof rec.note === 'string' ? rec.note : '',
       })
     }
   }

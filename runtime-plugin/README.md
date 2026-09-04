@@ -34,6 +34,10 @@ dsh-mockworkspace/                       ← Mock 根（当前会话工作区）
 - 批次列表：名字 / 会话数，按时间倒序
 - 展开批次：
   - **会话（轨迹）**：点击打开；右键分叉
+  - **存快照**（相机按钮）：会话中途冻结当前效果 —— fork 出快照会话
+    （轨迹冻结副本，改名「快照 · …」后归档隐藏）+ Host 复制当前产物快照 +
+    写 record.json（`kind:'snapshot'`）；原会话不受打扰继续对话。
+    会话 running 时禁用（产物是瞬态）
   - **产物**：懒加载目录树，点文件用系统默认程序打开
   - 操作：**归档**（meta.status → archived，目录保留）、**删除**（workspace 注册
     + 目录 + meta 全部移除，需二次确认）
@@ -47,6 +51,7 @@ dsh-mockworkspace/                       ← Mock 根（当前会话工作区）
 | `mock.list-batches` | – | 列出全部批次（含 meta、workspaceId、sessionIds） |
 | `mock.archive-batch` | `{ path }` | 批次置为 archived |
 | `mock.archive-session` | `{ sessionId, batchPath }` | 扫产物快照 + 写 record.json；扫描无果时自动找含 `scripts.build` 的前端项目 install + build 后重扫（诊断记入 record.json `builds`，失败不阻断） |
+| `mock.snapshot-session` | `{ sessionId, sourceSessionId, batchPath, note? }` | 会话中途快照：与归档共用产物管线，record 带 `kind:'snapshot'` / `sourceSessionId` / `note`；sessionId 是 Client fork 出的快照会话，原会话不归档 |
 | `mock.delete-batch` | `{ path, workspaceId }` | 删注册 + rm -rf 目录（仅限 mock 根内） |
 | `mock.list-directory` | `{ path }` | 列目录（产物树） |
 | `mock.open-hub` | – | 回退：打开产物托管页（artifact-hub，macOS `open`） |

@@ -126,10 +126,16 @@ POST /api/library/delete-set  { setId }
 ```
 archives/<batchId>/<ts>/
 ├── record.json      ← { archiveId, batchId, batchName, sessionId, caseId,
-│                        caseSetId, promptHash, archivedAt, artifacts[] }
+│                        caseSetId, promptHash, archivedAt, artifacts[],
+│                        kind, sourceSessionId?, note? }
 ├── <name>-dist/     ← React 构建产物快照（dist/ 复制）
 └── <name>-site/     ← 静态产物快照（index.html 根复制）
 ```
+
+`kind` 区分两类记录：`archive`（终点归档，sessionId 是原会话）与
+`snapshot`（会话中途快照，sessionId 是 fork 出的快照会话，轨迹已冻结；
+`note` 是用户备注）。快照条目的「继续对话」分叉的是快照会话
+（fork-of-fork），快照本身保持不变。
 
 - `GET /api/iterations?caseId=` → 归档条目（时间倒序），管理页按用例聚合
 - `GET /archive/<batchId>/<ts>/<snapshotDir>/...` → 快照静态伺服（越界校验同 /preview）

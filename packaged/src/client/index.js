@@ -99,6 +99,7 @@ const ICONS = {
   gear: 'M7 2.5 H9 L9.5 4.2 A4.5 4.5 0 0 1 11 5.1 L12.6 4.6 L13.6 6.4 L12.2 7.4 A4.5 4.5 0 0 1 12.2 8.6 L13.6 9.6 L12.6 11.4 L11 10.9 A4.5 4.5 0 0 1 9.5 11.8 L9 13.5 H7 L6.5 11.8 A4.5 4.5 0 0 1 5 10.9 L3.4 11.4 L2.4 9.6 L3.8 8.6 A4.5 4.5 0 0 1 3.8 7.4 L2.4 6.4 L3.4 4.6 L5 5.1 A4.5 4.5 0 0 1 6.5 4.2 Z M8 6 A2 2 0 1 0 8 10 A2 2 0 0 0 8 6 Z',
   folder: 'M2 4.5 A1.5 1.5 0 0 1 3.5 3 H5.8 L7.3 4.5 H12.5 A1.5 1.5 0 0 1 14 6 V11.5 A1.5 1.5 0 0 1 12.5 13 H3.5 A1.5 1.5 0 0 1 2 11.5 Z',
   archive: 'M3 4.5 H13 L12.5 12.5 A1 1 0 0 1 11.5 13.5 H4.5 A1 1 0 0 1 3.5 12.5 Z M4.5 7.5 H11.5',
+  camera: 'M2 5.5 A1.5 1.5 0 0 1 3.5 4 H5.6 L6.6 2.5 H9.4 L10.4 4 H12.5 A1.5 1.5 0 0 1 14 5.5 V11.5 A1.5 1.5 0 0 1 12.5 13 H3.5 A1.5 1.5 0 0 1 2 11.5 Z M8 6.4 A2.2 2.2 0 1 0 8 10.8 A2.2 2.2 0 0 0 8 6.4 Z',
   trash: 'M3 4.5 H13 M6 4.5 V3.5 A1 1 0 0 1 7 2.5 H9 A1 1 0 0 1 10 3.5 V4.5 M4.5 4.5 L5.2 12.5 A1 1 0 0 0 6.2 13.5 H9.8 A1 1 0 0 0 10.8 12.5 L11.5 4.5',
   globe: 'M8 2 A6 6 0 1 0 8 14 A6 6 0 1 0 8 2 Z M2 8 H14 M8 2 C9.8 3.8 10.5 5.8 10.5 8 C10.5 10.2 9.8 12.2 8 14 C6.2 12.2 5.5 10.2 5.5 8 C5.5 5.8 6.2 3.8 8 2 Z',
   list: 'M2.5 4 H13.5 M2.5 8 H13.5 M2.5 12 H13.5',
@@ -168,6 +169,10 @@ const CSS = `
 .dshmw-sessact{position:absolute;right:4px;display:none;align-items:center;justify-content:center;width:20px;height:20px;border:none;border-radius:5px;padding:0;background:var(--dsw-alias-bg-layer-1);cursor:pointer;color:var(--dsw-alias-label-secondary)}
 .dshmw-sessact:hover{color:var(--dsw-alias-label-primary)}
 .dshmw-sessrow:hover .dshmw-sessact{display:inline-flex}
+/* 会话行多动作容器：sessact 是绝对定位单按钮，多按钮需容器排开，否则互相叠住 */
+.dshmw-sessacts{position:absolute;right:4px;display:none;align-items:center;gap:2px}
+.dshmw-sessrow:hover .dshmw-sessacts{display:inline-flex}
+.dshmw-sessacts .dshmw-sessact{position:static;display:inline-flex}
 .dshmw-sessrow:hover .dshmw-sessmeta{visibility:hidden}
 .dshmw-sess{display:flex;align-items:center;gap:6px;width:100%;height:28px;border:none;border-radius:6px;padding:0 6px;box-sizing:border-box;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:12px;text-align:left}
 .dshmw-sess:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
@@ -323,6 +328,11 @@ const CSS = `
 .dshmw-traj-detail{white-space:pre-wrap;overflow-wrap:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:16px;margin-top:4px;color:var(--dsw-alias-label-secondary)}
 .dshmw-traj-details{font-size:11px;margin-top:4px;color:var(--dsw-alias-state-business-primary)}
 .dshmw-traj-toggle{border:none;background:transparent;padding:0;font-family:inherit;font-size:11px;color:var(--dsw-alias-state-business-primary);cursor:pointer;margin-top:4px}
+.dshmw-snapform{display:flex;align-items:center;gap:6px;padding:3px 4px 3px 26px;box-sizing:border-box}
+.dshmw-snapinput{flex:1;min-width:0;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:12px;padding:3px 6px;font-family:inherit}
+.dshmw-snapbtn{flex:none;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:11px;padding:3px 8px;cursor:pointer;font-family:inherit}
+.dshmw-snapbtn:hover{background:var(--dsw-alias-bg-layer-2)}
+.dshmw-snapbtn:disabled{opacity:.5;cursor:default}
 `
 
 // ---- host RPC（/mock loopback channel，消息形状同 createWebConnectionRpc） ----
@@ -348,6 +358,8 @@ const listBatches = () => rpcCall('list-batches')
 const createBatch = (name, opts) => rpcCall('create-batch', Object.assign({ name }, opts || {}))
 const archiveBatch = (path) => rpcCall('archive-batch', { path })
 const archiveSessionRun = (sessionId, batchPath) => rpcCall('archive-session', { sessionId, batchPath })
+const snapshotSessionRun = (sessionId, sourceSessionId, batchPath, note) =>
+  rpcCall('snapshot-session', { sessionId, sourceSessionId, batchPath, note })
 const deleteBatch = (path) => rpcCall('delete-batch', { path })
 const getConfig = () => rpcCall('get-config')
 const setConfig = (root) => rpcCall('set-config', { root })
@@ -519,6 +531,27 @@ function archiveSessionById(sessionId) {
   const w = ctxRef.get('workspaces')
   if (!w || typeof w.archiveSession !== 'function') return Promise.resolve()
   return w.archiveSession(sessionId)
+}
+
+// ---- 会话快照：fork 冻结轨迹 + Host 冻结产物 ----
+// fork 出的子会话即「冻结到这一刻」的轨迹副本（继承 cwd/上下文/lineage）；
+// fork 不冻结文件，产物快照由 Host snapshot-session 此刻复制。
+// 快照会话改名「快照 · …」后归档隐藏（日志保留可恢复），原会话继续对话。
+function snapshotSession(sessionId, batchPath, note) {
+  const s = ctxRef.get('sessions')
+  if (!s || typeof s.fork !== 'function') return Promise.reject(new Error('sessions 服务不支持分叉'))
+  return s.fork({ sessionId, increaseTitle: false }).then((childId) => {
+    if (typeof childId !== 'string' || childId === '') throw new Error('分叉未返回新会话')
+    const stamp = new Date().toLocaleString('zh-CN', { hour12: false })
+    const title = '快照 · ' + (note !== '' ? note : stamp)
+    // 改名尽力而为：sessions 服务无 rename 时保留 fork 默认标题。
+    const renamed = typeof s.rename === 'function'
+      ? Promise.resolve(s.rename({ sessionId: childId, title })).catch(() => {})
+      : Promise.resolve()
+    return renamed
+      .then(() => snapshotSessionRun(childId, sessionId, batchPath, note))
+      .then((res) => archiveSessionById(childId).catch((reason) => console.warn('session archive rejected:', reason)).then(() => res))
+  })
 }
 
 // ---- time label ----
@@ -1117,6 +1150,27 @@ function BatchRow(props) {
   const sessionIds = props.sessionIds
   const [open, setOpen] = React.useState(false)
   const [confirmDelete, setConfirmDelete] = React.useState(false)
+  // 会话快照内联表单：snapId = 正在存快照的会话 id（null 关闭）
+  const [snapId, setSnapId] = React.useState(null)
+  const [snapNote, setSnapNote] = React.useState('')
+  const [snapBusy, setSnapBusy] = React.useState(false)
+  const confirmSnapshot = (id) => {
+    if (snapBusy) return
+    setSnapBusy(true)
+    snapshotSession(id, batch.path, snapNote.trim())
+      .then((res) => {
+        const rec = res && res.record
+        const hasSnap = rec && Array.isArray(rec.artifacts) && rec.artifacts.length > 0
+        showCtxToast(hasSnap
+          ? '已存快照（轨迹 + 产物），原会话可继续'
+          : '已存快照（仅轨迹；未发现可快照 HTML 产物）')
+        setSnapId(null)
+        setSnapNote('')
+        props.onChanged()
+      })
+      .catch((err) => { showCtxToast('快照失败：' + errorText(err)); console.warn(err) })
+      .finally(() => setSnapBusy(false))
+  }
 
   // 删除批次目录后顺带注销对应 workspace 注册（目录没了，注册留着是死引用）。
   const removeBatchWorkspace = () => {
@@ -1184,41 +1238,80 @@ function BatchRow(props) {
       newSessionRow,
       sessionIds.map((id) => {
         const sum = sessionsById[id]
-        return React.createElement('div', { key: id, className: 'dshmw-sessrow' },
-          React.createElement('button', {
-            type: 'button',
-            className: 'dshmw-sess',
-            onClick: () => { openSession(id) },
-            onContextMenu: (e) => {
-              e.preventDefault()
-              forkSession(id)
+        const running = sum && sum.running === true
+        return React.createElement('div', { key: id },
+          React.createElement('div', { className: 'dshmw-sessrow' },
+            React.createElement('button', {
+              type: 'button',
+              className: 'dshmw-sess',
+              onClick: () => { openSession(id) },
+              onContextMenu: (e) => {
+                e.preventDefault()
+                forkSession(id)
+              },
             },
-          },
-            sum.running === true || sum.completed === true
-              ? React.createElement('span', { className: 'dshmw-sessdot' })
-              : React.createElement('span', { className: 'dshmw-sessdot', style: { background: 'transparent' } }),
-            React.createElement('span', { className: 'dshmw-sessname' }, sum.blank ? '新会话' : (sum.displayTitle || sum.title || id)),
-            React.createElement('span', { className: 'dshmw-sessmeta' }, relativeTimeLabel(sum.updatedAt))),
-          React.createElement('button', {
-            type: 'button',
-            className: 'dshmw-sessact',
-            title: '归档该会话（产物快照 + 会话记录 + 日志保留）',
-            onClick: (e) => {
-              e.stopPropagation()
-              archiveSessionRun(id, batch.path)
-                .then((res) => {
-                  const rec = res && res.record
-                  const hasSnap = rec && Array.isArray(rec.artifacts) && rec.artifacts.length > 0
-                  return archiveSessionById(id).then(() => {
-                    showCtxToast(hasSnap
-                      ? '已归档（产物 + 会话记录）'
-                      : '已归档（未发现可快照 HTML 产物，产物生成后可再归档一次）')
-                    props.onChanged()
-                  })
-                })
-                .catch((err) => { showCtxToast('归档失败：' + errorText(err)); console.warn(err) })
-            },
-          }, React.createElement(SvgIcon, { d: ICONS.archive, size: 12 })))
+              sum.running === true || sum.completed === true
+                ? React.createElement('span', { className: 'dshmw-sessdot' })
+                : React.createElement('span', { className: 'dshmw-sessdot', style: { background: 'transparent' } }),
+              React.createElement('span', { className: 'dshmw-sessname' }, sum.blank ? '新会话' : (sum.displayTitle || sum.title || id)),
+              React.createElement('span', { className: 'dshmw-sessmeta' }, relativeTimeLabel(sum.updatedAt))),
+            React.createElement('div', { className: 'dshmw-sessacts' },
+              React.createElement('button', {
+                type: 'button',
+                className: 'dshmw-sessact',
+                disabled: running,
+                title: running
+                  ? '会话进行中：产物可能是瞬态，等回合结束再存快照'
+                  : '存快照：fork 冻结当前轨迹 + 复制当前产物，原会话继续',
+                onClick: (e) => {
+                  e.stopPropagation()
+                  if (running) return
+                  setSnapNote('')
+                  setSnapId(snapId === id ? null : id)
+                },
+              }, React.createElement(SvgIcon, { d: ICONS.camera, size: 12 })),
+              React.createElement('button', {
+                type: 'button',
+                className: 'dshmw-sessact',
+                title: '归档该会话（产物快照 + 会话记录 + 日志保留）',
+                onClick: (e) => {
+                  e.stopPropagation()
+                  archiveSessionRun(id, batch.path)
+                    .then((res) => {
+                      const rec = res && res.record
+                      const hasSnap = rec && Array.isArray(rec.artifacts) && rec.artifacts.length > 0
+                      return archiveSessionById(id).then(() => {
+                        showCtxToast(hasSnap
+                          ? '已归档（产物 + 会话记录）'
+                          : '已归档（未发现可快照 HTML 产物，产物生成后可再归档一次）')
+                        props.onChanged()
+                      })
+                    })
+                    .catch((err) => { showCtxToast('归档失败：' + errorText(err)); console.warn(err) })
+                },
+              }, React.createElement(SvgIcon, { d: ICONS.archive, size: 12 })))),
+          snapId === id ? React.createElement('div', { className: 'dshmw-snapform' },
+            React.createElement('input', {
+              className: 'dshmw-snapinput',
+              type: 'text',
+              placeholder: '快照备注（可留空）',
+              value: snapNote,
+              autoFocus: true,
+              disabled: snapBusy,
+              onChange: (e) => setSnapNote(e.target.value),
+              onKeyDown: (e) => {
+                if (e.key === 'Enter') confirmSnapshot(id)
+                if (e.key === 'Escape') setSnapId(null)
+              },
+            }),
+            React.createElement('button', {
+              type: 'button', className: 'dshmw-snapbtn', disabled: snapBusy,
+              onClick: () => confirmSnapshot(id),
+            }, snapBusy ? '快照中…' : '存快照'),
+            React.createElement('button', {
+              type: 'button', className: 'dshmw-snapbtn', disabled: snapBusy,
+              onClick: () => setSnapId(null),
+            }, '取消')) : null)
       })) : null)
 }
 
@@ -1997,6 +2090,12 @@ function CasesResultView(props) {
               },
             }, confirmingDelete ? '确认删除' : '删除') : null)),
           React.createElement('div', { className: 'dshmw-hit-cardmeta' },
+            e.kind === 'snapshot'
+              ? React.createElement('span', { className: 'dshmw-casebadge', title: e.sourceSessionId ? '快照自会话 ' + e.sourceSessionId : '会话快照' }, '快照')
+              : null,
+            e.kind === 'snapshot' && e.note
+              ? React.createElement('span', { className: 'dshmw-hit-date', title: e.note }, e.note)
+              : null,
             React.createElement('span', { className: 'dshmw-hit-date', title: e.archivedAt || '' }, fmtDateTime(e.archivedAt)),
             React.createElement('span', { className: 'dshmw-hit-sess', title: '会话 ' + e.sessionId }, String(e.sessionId || '').slice(0, 12)))))
     })

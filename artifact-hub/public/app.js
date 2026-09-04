@@ -288,7 +288,7 @@ function renderIterations(rebuildFilter = false) {
   }
   const html = [...groups.entries()].map(([key, list]) => `
     <div class="iter-group">
-      <div class="iter-group-title" title="${esc(key)}">${esc(key)} <span class="dim">· ${list.length} 次归档</span></div>
+      <div class="iter-group-title" title="${esc(key)}">${esc(key)} <span class="dim">· ${list.length} 条记录</span></div>
       ${list.map(renderIterRow).join('')}
     </div>`).join('')
   body.innerHTML = html
@@ -303,6 +303,7 @@ function renderIterations(rebuildFilter = false) {
 
 function renderIterRow(e) {
   const ts = iterTs(e)
+  const isSnapshot = e.kind === 'snapshot'
   const snapLinks = (e.artifacts || []).filter((a) => a.snapshotDir).map((a) => {
     const url = `/archive/${encodeURIComponent(e.batchId)}/${encodeURIComponent(ts)}/${encodeURIComponent(a.snapshotDir)}/`
     return `<a class="iter-link" href="${url}" target="_blank" rel="noopener" title="${esc(url)}">预览·${esc(a.name)}</a>`
@@ -310,12 +311,16 @@ function renderIterRow(e) {
   const fk = state.forked[e.batchId + '|' + e.sessionId]
   const forkCell = fk
     ? `<span class="iter-forked" title="新会话 ${esc(fk)}：到 dsh Mock 实验场批次下刷新并打开，继续提改进意见">已分叉 → ${esc(String(fk).slice(0, 12))}…</span>`
-    : `<button type="button" class="iter-btn" data-act="fork" data-batch="${esc(e.batchId)}" data-session="${esc(e.sessionId)}" title="分叉该会话（继承全部上下文），在新会话里继续迭代">继续对话</button>`
+    : `<button type="button" class="iter-btn" data-act="fork" data-batch="${esc(e.batchId)}" data-session="${esc(e.sessionId)}" title="${isSnapshot ? '从快照分叉新会话继续迭代（快照本身保持不变）' : '分叉该会话（继承全部上下文），在新会话里继续迭代'}">继续对话</button>`
   const date = e.archivedAt ? new Date(e.archivedAt).toLocaleString('zh-CN', { hour12: false }) : ''
+  const badge = isSnapshot ? '<span class="iter-badge-snap">快照</span>' : ''
+  const note = isSnapshot && e.note ? `<span class="iter-note" title="${esc(e.note)}">${esc(e.note)}</span>` : ''
   return `<div class="iter-row">
     <span class="iter-date" title="${esc(e.archivedAt || '')}">${esc(date)}</span>
+    ${badge}
     <span class="iter-meta" title="批次 ${esc(e.batchId)}">${esc(e.batchName)}</span>
-    <span class="iter-sess mono" title="会话 ${esc(e.sessionId)}">${esc(String(e.sessionId || '').slice(0, 12))}</span>
+    ${note}
+    <span class="iter-sess mono" title="会话 ${esc(e.sessionId)}${isSnapshot && e.sourceSessionId ? '（快照自 ' + esc(e.sourceSessionId) + '）' : ''}">${esc(String(e.sessionId || '').slice(0, 12))}</span>
     <span class="iter-art">${snapLinks || '<span class="dim">无快照</span>'}</span>
     <span class="iter-acts">
       <button type="button" class="iter-btn" data-act="trace" data-batch="${esc(e.batchId)}" data-session="${esc(e.sessionId)}" title="查看该会话执行轨迹">轨迹</button>

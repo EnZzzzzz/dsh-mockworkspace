@@ -374,8 +374,8 @@ Service 实例、Event payload、Slot props、Session/Conversation 快照、Tool
 
 ## 17. 本仓库参考实现
 
-- `runtime-plugin/host.js` —— 插件 Host 半边源码（直接可作 `code.host` 提交）。示范了：`ctx.get` 判空取可选服务、`fs` 读写用户级配置文件、`shell` 执行命令、workspace 注册、纯 JS 无 import。
-- `runtime-plugin/client.js` —— 插件 Client 半边源码（`code.client`）。示范了：`ctx.get('slots')` + `slots.inject`/`slots.register` 在侧边栏注册 tab、`React.createElement` 组件树、localStorage 守卫式读写、`host.call` 调 Host。
+- `runtime-plugin/host.js` —— 插件 Host 半边源码（直接可作 `code.host` 提交）。示范了：`ctx.get` 判空取可选服务、`fs` 读写用户级配置文件、`shell` 执行命令、workspace 注册、归档/快照共用管线（`mock.archive-session` / `mock.snapshot-session` → `writeSessionArchive`）、纯 JS 无 import。
+- `runtime-plugin/client.js` —— 插件 Client 半边源码（`code.client`）。示范了：`ctx.get('slots')` + `slots.inject`/`slots.register` 在侧边栏注册 tab、`React.createElement` 组件树、localStorage 守卫式读写、`host.call` 调 Host、会话快照编排（`sessions.fork` 冻结轨迹 → 尽力 `rename` → `workspaces.archiveSession` 隐藏 → Host 冻结产物）。
 - `packaged/` —— 同一插件的正式打包版（有 `process.env` 等完整运行时能力），对比阅读可理解动态插件与正式包的差异。
 - `docs/backend-api.md` —— 后端 API 说明。
 

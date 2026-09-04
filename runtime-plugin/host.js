@@ -448,59 +448,92 @@ return {
       return { dir, pm, ok: build.code === 0, steps }
     }
 
-    // ---- RPC：归档会话（产物快照 + 会话记录，供 Hub「用例迭代」时间线） ----
-    // args: { sessionId, batchPath } → 扫批次目录产物 → 快照复制到
+    // ---- 归档/快照共用管线：扫批次目录产物 → 快照复制到
     // <mock根>/case-library/archives/<batchId>/<ts>/ → 写 record.json。
     // 不依赖 Hub 在线：Hub 启动后扫 archives/ 目录即出迭代时间线。
+    // extra 合并进 record：归档传 { kind:'archive' }；快照传
+    // { kind:'snapshot', sourceSessionId, note }（轨迹由 Client fork 冻结，
+    // 本管线只冻结产物与记录；fork 不冻结文件，故产物必须此刻复制）。
+    async function writeSessionArchive(sessionId, batchPath, extra) {
+      const meta = await readMeta(batchPath)
+      if (meta === null) return { ok: false, error: '未找到批次元数据' }
+
+      const batchId = (meta && meta.batchId) || baseName(batchPath)
+      const now = new Date()
+      const pad = (n, w) => String(n).padStart(w, '0')
+      const ts = pad(now.getFullYear(), 4) + pad(now.getMonth() + 1, 2) + pad(now.getDate(), 2)
+        + '-' + pad(now.getHours(), 2) + pad(now.getMinutes(), 2) + pad(now.getSeconds(), 2)
+      const archivesRoot = joinPath(joinPath(mockRoot(), 'case-library'), 'archives')
+      const archiveDir = joinPath(joinPath(archivesRoot, batchId), ts)
+      await mkdirp(archiveDir)
+
+      let artifacts = await scanBatchArtifacts(batchPath)
+      // 扫描无果：可能是未构建的前端项目（无 index.html / dist），自动 install + build 后重扫。
+      const builds = []
+      if (artifacts.length === 0) {
+        for (const dir of await findBuildProjects(batchPath)) {
+          builds.push(await buildProject(dir))
+        }
+        if (builds.some((b) => b.ok)) artifacts = await scanBatchArtifacts(batchPath)
+      }
+      const snapshots = []
+      for (const a of artifacts) {
+        const snapName = a.kind === 'dist' ? safeName(a.name) + '-dist' : safeName(a.name) + '-site'
+        await copyTree(a.rootPath, joinPath(archiveDir, snapName), ARCHIVE_SKIP_DIRS)
+        snapshots.push({ name: a.name, kind: a.kind, snapshotDir: snapName, entryFile: a.entryFile })
+      }
+
+      const record = {
+        archiveId: batchId + '/' + ts,
+        batchId,
+        batchName: (meta && meta.name) || batchId,
+        sessionId,
+        caseId: (meta && meta.caseId) || '',
+        caseSetId: (meta && meta.caseSetId) || '',
+        promptHash: (meta && meta.promptHash) || '',
+        archivedAt: now.toISOString(),
+        artifacts: snapshots,
+        builds,
+      }
+      if (extra && typeof extra === 'object') Object.assign(record, extra)
+      const recordTarget = await resolveTarget(joinPath(archiveDir, 'record.json'))
+      await fs.writeText(recordTarget, JSON.stringify(record, null, 2))
+      return { ok: true, record }
+    }
+
+    // ---- RPC：归档会话（终点归档，供 Hub「用例迭代」时间线） ----
+    // args: { sessionId, batchPath }。会话隐藏由 Client workspaces.archiveSession 做。
     harness.handle('mock.archive-session', async (args) => {
       try {
         const sessionId = args && typeof args.sessionId === 'string' ? args.sessionId : ''
         const batchPath = args && typeof args.batchPath === 'string' ? args.batchPath : ''
         if (sessionId === '' || batchPath === '') return { ok: false, error: '缺 sessionId / batchPath' }
         if (!insideMockRoot(batchPath)) return { ok: false, error: '路径不在 mock 工作区内' }
-        const meta = await readMeta(batchPath)
-        if (meta === null) return { ok: false, error: '未找到批次元数据' }
+        return await writeSessionArchive(sessionId, batchPath, { kind: 'archive' })
+      } catch (err) {
+        return { ok: false, error: errorText(err) }
+      }
+    })
 
-        const batchId = (meta && meta.batchId) || baseName(batchPath)
-        const now = new Date()
-        const pad = (n, w) => String(n).padStart(w, '0')
-        const ts = pad(now.getFullYear(), 4) + pad(now.getMonth() + 1, 2) + pad(now.getDate(), 2)
-          + '-' + pad(now.getHours(), 2) + pad(now.getMinutes(), 2) + pad(now.getSeconds(), 2)
-        const archivesRoot = joinPath(joinPath(mockRoot(), 'case-library'), 'archives')
-        const archiveDir = joinPath(joinPath(archivesRoot, batchId), ts)
-        await mkdirp(archiveDir)
-
-        let artifacts = await scanBatchArtifacts(batchPath)
-        // 扫描无果：可能是未构建的前端项目（无 index.html / dist），自动 install + build 后重扫。
-        const builds = []
-        if (artifacts.length === 0) {
-          for (const dir of await findBuildProjects(batchPath)) {
-            builds.push(await buildProject(dir))
-          }
-          if (builds.some((b) => b.ok)) artifacts = await scanBatchArtifacts(batchPath)
+    // ---- RPC：会话快照（会话中途冻结当前效果） ----
+    // args: { sessionId, sourceSessionId, batchPath, note? }。sessionId 是 Client
+    // fork 出的快照会话（轨迹冻结副本）；本 RPC 只复制产物快照 + 写 record.json。
+    // 原会话不归档、不受打扰，可继续对话。
+    harness.handle('mock.snapshot-session', async (args) => {
+      try {
+        const sessionId = args && typeof args.sessionId === 'string' ? args.sessionId : ''
+        const sourceSessionId = args && typeof args.sourceSessionId === 'string' ? args.sourceSessionId : ''
+        const batchPath = args && typeof args.batchPath === 'string' ? args.batchPath : ''
+        const note = args && typeof args.note === 'string' ? args.note.trim() : ''
+        if (sessionId === '' || sourceSessionId === '' || batchPath === '') {
+          return { ok: false, error: '缺 sessionId / sourceSessionId / batchPath' }
         }
-        const snapshots = []
-        for (const a of artifacts) {
-          const snapName = a.kind === 'dist' ? safeName(a.name) + '-dist' : safeName(a.name) + '-site'
-          await copyTree(a.rootPath, joinPath(archiveDir, snapName), ARCHIVE_SKIP_DIRS)
-          snapshots.push({ name: a.name, kind: a.kind, snapshotDir: snapName, entryFile: a.entryFile })
-        }
-
-        const record = {
-          archiveId: batchId + '/' + ts,
-          batchId,
-          batchName: (meta && meta.name) || batchId,
-          sessionId,
-          caseId: (meta && meta.caseId) || '',
-          caseSetId: (meta && meta.caseSetId) || '',
-          promptHash: (meta && meta.promptHash) || '',
-          archivedAt: now.toISOString(),
-          artifacts: snapshots,
-          builds,
-        }
-        const recordTarget = await resolveTarget(joinPath(archiveDir, 'record.json'))
-        await fs.writeText(recordTarget, JSON.stringify(record, null, 2))
-        return { ok: true, record }
+        if (!insideMockRoot(batchPath)) return { ok: false, error: '路径不在 mock 工作区内' }
+        return await writeSessionArchive(sessionId, batchPath, {
+          kind: 'snapshot',
+          sourceSessionId,
+          note,
+        })
       } catch (err) {
         return { ok: false, error: errorText(err) }
       }
