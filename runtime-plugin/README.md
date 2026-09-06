@@ -50,6 +50,7 @@ dsh-mockworkspace/                       ← Mock 根（当前会话工作区）
  `mock.create-batch` | `{ name }` | 建目录 + meta.json + 注册 workspace 
 | `mock.list-batches` | – | 列出全部批次（含 meta、workspaceId、sessionIds） |
 | `mock.archive-batch` | `{ path }` | 批次置为 archived |
+| `mock.prepare-case-assets` | `{ batchPath, files: [{stored, name}] }` | 用例附件落盘：把库内附件（`case-library/attachments/`，防越界）复制进批次 `assets/`（重名加后缀），落盘相对路径并入 meta.json `assets`（幂等），随归档 record.json 冻结 |
 | `mock.archive-session` | `{ sessionId, batchPath }` | 扫产物快照 + 写 record.json；扫描无果时自动找含 `scripts.build` 的前端项目 install + build 后重扫（诊断记入 record.json `builds`，失败不阻断） |
 | `mock.snapshot-session` | `{ sessionId, sourceSessionId, batchPath, note? }` | 会话中途快照：与归档共用产物管线，record 带 `kind:'snapshot'` / `sourceSessionId` / `note`；sessionId 是 Client fork 出的快照会话，原会话不归档 |
 | `mock.delete-batch` | `{ path, workspaceId }` | 删注册 + rm -rf 目录（仅限 mock 根内） |
@@ -66,8 +67,9 @@ dsh-mockworkspace/                       ← Mock 根（当前会话工作区）
 cases?ids=…` 按归档 id 取原始信息），不加载 Hub 管理页前端。
 
 面板另有「用例库」卡片：benchmark prompt 用例集导入（CSV/JSONL/JSON，两步
-字段映射表单）+ 标签筛选浏览，数据存 mock 根 `case-library/library.db`
-（SQLite）。
+字段映射表单，支持附件列）+ 标签筛选浏览，数据存 mock 根 `case-library/library.db`
+（SQLite）。用例行展开可手动挂载/移除配套资源文件（如 PDF），「用该用例
+开跑」时附件复制进批次 `assets/` 并在 prompt 末尾追加材料清单。
 
 安全边界：所有目录操作经 `insideMockRoot()` 校验，只允许 mock 根（含 `runs/`）内
 的路径；删除前二次确认。

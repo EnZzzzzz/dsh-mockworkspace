@@ -205,8 +205,8 @@ const CSS = `
 .dshmw-artimg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top center;border:0;display:block;background:#fff}
 .dshmw-artplaceholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--dsw-alias-label-tertiary,#8a919d);opacity:.6}
 .dshmw-artmeta{display:flex;align-items:center;gap:6px;padding:4px 6px;min-width:0;font-size:11px}
-.dshmw-artfilter{display:flex;gap:6px;padding:2px 6px 6px}
-.dshmw-artfilter .dshmw-select{flex:1;min-width:0}
+.dshmw-artfilter{display:flex;flex-wrap:wrap;gap:6px;padding:2px 6px 6px}
+.dshmw-artfilter .dshmw-select{flex:1 1 96px;min-width:0}
 .dshmw-artpop{position:fixed;z-index:80;width:230px;box-sizing:border-box;pointer-events:none;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:8px 10px;box-shadow:0 6px 24px rgba(0,0,0,.18);color:var(--dsw-alias-label-secondary);font-size:11px;line-height:16px;text-align:left}
 .dshmw-artpopname{font-size:12px;font-weight:600;color:var(--dsw-alias-label-primary);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .dshmw-artpoprow{display:flex;gap:6px;margin-top:3px;min-width:0}
@@ -234,6 +234,18 @@ const CSS = `
 .dshmw-libprompt.open{display:block;overflow:visible;white-space:pre-wrap;overflow-wrap:break-word;color:var(--dsw-alias-label-primary)}
 .dshmw-tags{display:flex;flex-wrap:wrap;gap:4px}
 .dshmw-tag{flex:none;border-radius:4px;padding:0 6px;font-size:10px;line-height:16px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:120px}
+.dshmw-atts{display:flex;flex-wrap:wrap;gap:4px}
+.dshmw-attchip{flex:none;display:inline-flex;align-items:center;gap:3px;max-width:100%;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l1);border-radius:4px;padding:0 6px;font-size:10px;line-height:16px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;overflow:hidden}
+.dshmw-attchip:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2)}
+.dshmw-attname{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:140px}
+.dshmw-attsize{flex:none;opacity:.7}
+.dshmw-attdel{flex:none;padding:0 0 0 2px;font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary,#8a919d);cursor:pointer}
+.dshmw-attdel:hover{color:var(--dsw-alias-state-error-primary)}
+.dshmw-attform{display:flex;align-items:center;gap:4px}
+.dshmw-attinput{flex:1;min-width:0;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:11px;padding:2px 6px;font-family:inherit}
+.dshmw-attbtn{flex:none;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);font-size:11px;padding:2px 8px;cursor:pointer;font-family:inherit}
+.dshmw-attbtn:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
+.dshmw-attbtn:disabled{opacity:.5;cursor:default}
 .dshmw-libpager{display:flex;align-items:center;gap:4px;padding:2px 4px 4px;box-sizing:border-box}
 .dshmw-pgbtn{flex:none;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary)}
 .dshmw-pgbtn:hover:not(:disabled){background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
@@ -277,6 +289,9 @@ const CSS = `
 .dshmw-casestitle{flex:none;font-size:14px;font-weight:600;color:var(--dsw-alias-label-primary)}
 .dshmw-casesstatus{flex:none;font-size:11px;color:var(--dsw-alias-label-secondary)}
 .dshmw-casesfilter{flex:none;max-width:220px;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:12px;padding:3px 6px;font-family:inherit}
+.dshmw-casesfilterbar{flex:none;display:flex;align-items:center;gap:6px;margin:6px 0 2px}
+.dshmw-casesfilterbar .dshmw-casesfilter{flex:1;min-width:0;max-width:none}
+.dshmw-casesfilterbar .dshmw-select{flex:none;max-width:200px}
 .dshmw-casespag{flex:none;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dsw-alias-label-secondary)}
 .dshmw-cases-cols{flex:1;min-height:0;display:flex;flex-direction:row;gap:12px;overflow:hidden}
 .dshmw-cases-left{flex:none;width:300px;min-height:0;display:flex;flex-direction:column;gap:6px;overflow-y:auto;box-sizing:border-box}
@@ -372,6 +387,7 @@ const deleteBatch = (path) => rpcCall('delete-batch', { path })
 const getConfig = () => rpcCall('get-config')
 const setConfig = (root) => rpcCall('set-config', { root })
 const setBatchGen = (path, gen) => rpcCall('set-gen', { path, gen })
+const prepareCaseAssets = (batchPath, files) => rpcCall('prepare-case-assets', { batchPath, files })
 
 // 后端公开 API 调用（与 rpcCall 相同的 wire 格式，channel 固定 /api）。
 // dsh 后端 SessionsApi 提供 session.create / session.history / session.prompt
@@ -446,6 +462,15 @@ const previewLib = (payload) => hubApi('library/preview', {
 const importLib = (payload) => hubApi('library/import', {
   method: 'POST', headers: { 'content-type': 'application/json' },
   body: JSON.stringify(payload),
+})
+// 用例附件：attach 收绝对路径列表（返回 { attachments, errors }），detach 按名移除。
+const attachLibFiles = (setId, caseId, paths) => hubApi('library/attach', {
+  method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ setId, caseId, paths }),
+})
+const detachLibFile = (setId, caseId, name) => hubApi('library/detach', {
+  method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ setId, caseId, name }),
 })
 // 用例库每页条数（一页最多 20 条，支持翻页）
 const LIB_PAGE_SIZE = 20
@@ -801,11 +826,50 @@ function MockRootSettingsRow() {
     error ? React.createElement('div', { className: 'dshmw-seterror', role: 'alert' }, error) : null)
 }
 
-// ---- 用例库：用例行（sourceRef + prompt 预览 + 标签；点击展开全文，右键菜单） ----
+// ---- 用例库：用例行（sourceRef + prompt 预览 + 标签 + 附件；点击展开全文，右键菜单） ----
+// 附件大小：人类可读（KB/MB）。
+function fmtAttSize(n) {
+  const size = typeof n === 'number' && isFinite(n) && n >= 0 ? n : 0
+  if (size >= 1024 * 1024) return (size / (1024 * 1024)).toFixed(1) + ' MB'
+  if (size >= 1024) return Math.round(size / 1024) + ' KB'
+  return size + ' B'
+}
 function LibCaseRow(props) {
   const c = props.c
   const onMenu = props.onMenu
   const [open, setOpen] = React.useState(false)
+  // 附件管理后的局部覆盖：attach/detach 只刷新本条，不整页重载。
+  const [attsOverride, setAttsOverride] = React.useState(null)
+  const [attInput, setAttInput] = React.useState('')
+  const [attBusy, setAttBusy] = React.useState(false)
+  const atts = attsOverride !== null ? attsOverride : (Array.isArray(c.attachments) ? c.attachments : [])
+  const openAtt = (a) => {
+    const url = HUB_URL + 'api/library/attachment-file?setId=' + encodeURIComponent(c.setId || '')
+      + '&caseId=' + encodeURIComponent(c.id || '')
+      + '&name=' + encodeURIComponent(a && typeof a.name === 'string' ? a.name : '')
+    try { window.open(url, '_blank', 'noopener') } catch (err) { /* ignore */ }
+  }
+  const detachAtt = (a) => {
+    if (attBusy) return
+    setAttBusy(true)
+    detachLibFile(c.setId, c.id, a.name).then((v) => {
+      setAttsOverride(Array.isArray(v && v.attachments) ? v.attachments : atts.filter((x) => x.name !== a.name))
+    }).catch((err) => showCtxToast('移除附件失败：' + errorText(err)))
+      .finally(() => setAttBusy(false))
+  }
+  const attachAtts = () => {
+    if (attBusy) return
+    const paths = attInput.split(';').map((s) => s.trim()).filter((s) => s !== '')
+    if (paths.length === 0) return
+    setAttBusy(true)
+    attachLibFiles(c.setId, c.id, paths).then((v) => {
+      setAttsOverride(Array.isArray(v && v.attachments) ? v.attachments : atts)
+      setAttInput('')
+      const errs = v && Array.isArray(v.errors) ? v.errors : []
+      if (errs.length > 0) showCtxToast('部分附件添加失败：' + errorText(errs[0]))
+    }).catch((err) => showCtxToast('添加附件失败：' + errorText(err)))
+      .finally(() => setAttBusy(false))
+  }
   return React.createElement('div', {
     className: 'dshmw-librow',
     onContextMenu: onMenu ? (e) => onMenu(c, e) : undefined,
@@ -821,7 +885,39 @@ function LibCaseRow(props) {
     (c.tags && c.tags.length > 0)
       ? React.createElement('div', { className: 'dshmw-tags' },
           c.tags.slice(0, 4).map((t) => React.createElement('span', { key: t, className: 'dshmw-tag' }, t)))
-      : null)
+      : null,
+    atts.length > 0
+      ? React.createElement('div', { className: 'dshmw-atts' },
+          atts.map((a) => React.createElement('span', {
+            key: a.name,
+            className: 'dshmw-attchip',
+            title: '在新标签页预览附件' + (a.mime ? '（' + a.mime + '）' : ''),
+            onClick: (e) => { e.stopPropagation(); openAtt(a) },
+          },
+            '📎',
+            React.createElement('span', { className: 'dshmw-attname' }, a.name),
+            React.createElement('span', { className: 'dshmw-attsize' }, fmtAttSize(a.size)),
+            open ? React.createElement('span', {
+              className: 'dshmw-attdel',
+              title: '从该用例移除该附件',
+              onClick: (e) => { e.stopPropagation(); detachAtt(a) },
+            }, '×') : null)))
+      : null,
+    open ? React.createElement('div', { className: 'dshmw-attform' },
+        React.createElement('input', {
+          className: 'dshmw-attinput',
+          placeholder: '文件绝对路径，多个用 ; 分隔',
+          value: attInput,
+          disabled: attBusy,
+          onChange: (e) => setAttInput(e.target.value),
+          onKeyDown: (e) => { if (e.key === 'Enter' && !attBusy) attachAtts() },
+        }),
+        React.createElement('button', {
+          type: 'button',
+          className: 'dshmw-attbtn',
+          disabled: attBusy,
+          onClick: attachAtts,
+        }, attBusy ? '…' : '添加附件')) : null)
 }
 
 // ---- 用例右键菜单：发送 prompt 到聊天输入框 / 复制（DOM 注入官方 composer） ----
@@ -1026,11 +1122,41 @@ function startCaseRun(c) {
     .then((res) => {
       const batchPath = res && typeof res.batchPath === 'string' ? res.batchPath : ''
       if (batchPath === '') throw new Error('未返回批次目录')
-      return startBatchSession(batchPath)
+      return startBatchSession(batchPath).then(() => batchPath)
     })
-    .then(() => {
-      fillComposerWith(c.prompt, 0)
-      showCtxToast('已开跑：新建批次 + 会话，prompt 已填入输入框')
+    .then((batchPath) => {
+      const atts = Array.isArray(c.attachments) ? c.attachments : []
+      const files = atts
+        .filter((a) => a && typeof a.stored === 'string' && a.stored !== '')
+        .map((a) => ({ stored: a.stored, name: typeof a.name === 'string' ? a.name : '' }))
+      if (files.length === 0) {
+        fillComposerWith(c.prompt, 0)
+        showCtxToast('已开跑：新建批次 + 会话，prompt 已填入输入框')
+        return
+      }
+      // 有附件：先让 Host 把库内附件复制进批次 assets/ 并写入 meta.json，
+      // 再按复制结果决定 prompt 是否追加随附材料清单。复制失败不阻塞开跑。
+      prepareCaseAssets(batchPath, files)
+        .then((res) => {
+          const assets = res && Array.isArray(res.assets) ? res.assets : []
+          const errors = res && Array.isArray(res.errors) ? res.errors : []
+          if (errors.length > 0 || assets.length === 0) {
+            fillComposerWith(c.prompt, 0)
+            showCtxToast(errors.length > 0
+              ? '附件复制失败：' + errorText(errors[0])
+              : '已开跑：新建批次 + 会话，prompt 已填入输入框')
+            return
+          }
+          const prompt = c.prompt + '\n\n---\n随附材料（已放入本会话工作目录 assets/ 下）：\n'
+            + assets.map((a) => '- ' + a).join('\n')
+            + '\n读取 PDF 等二进制材料时，请先用命令行工具（如 pdftotext）提取文本。'
+          fillComposerWith(prompt, 0)
+          showCtxToast('已开跑：新建批次 + 会话，prompt（含 ' + assets.length + ' 个附件）已填入输入框')
+        })
+        .catch((err) => {
+          fillComposerWith(c.prompt, 0)
+          showCtxToast('附件复制失败：' + errorText(err))
+        })
     })
     .catch((err) => showCtxToast('开跑失败：' + errorText(err)))
 }
@@ -1050,6 +1176,7 @@ function LibraryImportForm(props) {
   const [refCol, setRefCol] = React.useState('')
   const [langCol, setLangCol] = React.useState('')
   const [tagCols, setTagCols] = React.useState([])
+  const [attCol, setAttCol] = React.useState('')
 
   const doParse = () => {
     if (busy) return
@@ -1065,6 +1192,7 @@ function LibraryImportForm(props) {
       setRefCol(g.refColumn || '')
       setLangCol(g.languageColumn || '')
       setTagCols(Array.isArray(g.tagColumns) ? g.tagColumns : [])
+      setAttCol(g.attachmentColumn || '')
       if (name === '') setName(String(v.fileName || '').replace(/\.[^.]+$/, ''))
     }).catch((err) => setError(errorText(err)))
       .finally(() => setBusy(false))
@@ -1078,9 +1206,11 @@ function LibraryImportForm(props) {
     const base = fileObj !== null
       ? { content: fileObj.content, fileName: fileObj.name }
       : { path: pathVal.trim() }
+    const mapping = { promptColumn: promptCol, refColumn: refCol, languageColumn: langCol, tagColumns: tagCols }
+    if (attCol !== '') mapping.attachmentColumn = attCol
     importLib(Object.assign(base, {
       name: name.trim(),
-      mapping: { promptColumn: promptCol, refColumn: refCol, languageColumn: langCol, tagColumns: tagCols },
+      mapping,
     })).then((v) => {
       props.onImported(v)
     }).catch((err) => { setBusy(false); setError(errorText(err)) })
@@ -1144,6 +1274,10 @@ function LibraryImportForm(props) {
             colSelect(refCol, setRefCol, '（可空）sourceRef 列'),
             React.createElement('span', { className: 'dshmw-fieldlabel', style: { flex: 'none', paddingTop: 5 } }, '语言'),
             colSelect(langCol, setLangCol, '（可空）')),
+          React.createElement('div', { key: 'map3', className: 'dshmw-formrow' },
+            React.createElement('span', { className: 'dshmw-fieldlabel', style: { width: 52, flex: 'none', paddingTop: 5 } }, '附件列'),
+            colSelect(attCol, setAttCol, '（无）'),
+            React.createElement('span', { className: 'dshmw-fieldlabel', style: { flex: 'none', paddingTop: 5, opacity: .6 } }, '列值 = 附件文件绝对路径，多个用 ; 分隔')),
           React.createElement('div', { key: 'taglabel', className: 'dshmw-fieldlabel' },
             '标签列（选中值进入 tags，用于筛选；其余列自动进 meta）'),
           React.createElement('div', { key: 'tags', className: 'dshmw-checkgrid' },
@@ -1623,6 +1757,11 @@ function MockPanel(props) {
         setLibPage(1)
         setLibReloadKey((k) => k + 1)
         if (v && v.set && typeof v.set.id === 'string') setLibSetId(v.set.id)
+        let msg = '导入完成'
+        const attN = v && typeof v.attached === 'number' ? v.attached : 0
+        const missN = v && typeof v.missingFiles === 'number' ? v.missingFiles : 0
+        if (attN > 0 || missN > 0) msg += '：附件 ' + attN + ' 个' + (missN > 0 ? '，缺失 ' + missN + ' 个' : '')
+        showCtxToast(msg)
       },
     }))
   } else if (libSets === null) {
@@ -1718,8 +1857,8 @@ function MockPanel(props) {
   // 产物点击的本地态：artPending 启动中（防重复点击），artError 启动失败原因。
   const [artPending, setArtPending] = React.useState({})
   const [artError, setArtError] = React.useState({})
-  // 生成参数筛选（模型 / Agent）与悬浮窗锚点（卡片矩形，fixed 定位用）。
-  const [artFilter, setArtFilter] = React.useState({ model: '', agent: '' })
+  // 生成参数筛选（模型 / Agent / Skill 版本 / 测试集 / 用例）与悬浮窗锚点。
+  const [artFilter, setArtFilter] = React.useState({ model: '', agent: '', skill: '', set: '', case: '' })
   const [artPop, setArtPop] = React.useState(null)
   // 点产物卡片：有 URL 直接打开；无 URL（未运行的 dev 产物）交给 Hub 启动
   // （install + dev server，Hub 同步等就绪），拿到 runtime.url 后打开。
@@ -1761,32 +1900,76 @@ function MockPanel(props) {
     } else {
       // 生成参数：Hub 已合并产物级 artifact.json gen 与批次 meta.gen。
       const artGenOf = (a) => (a && a.gen && typeof a.gen === 'object' ? a.gen : {})
+      const artMetaOf = (a) => (a && a.meta && typeof a.meta === 'object' ? a.meta : {})
       const allArts = hubBatches.flatMap((b) => b.artifacts || [])
       const genValues = (key) => [...new Set(allArts.map((a) => artGenOf(a)[key])
         .filter((v) => typeof v === 'string' && v !== ''))].sort()
-      const modelOptions = genValues('model')
-      const agentOptions = genValues('agent')
-      const artFiltering = artFilter.model !== '' || artFilter.agent !== ''
+      const setNameOf = (id) => {
+        const s = Array.isArray(libSets) ? libSets.find((x) => x && x.id === id) : null
+        return s && typeof s.name === 'string' && s.name !== '' ? s.name : id
+      }
+      // 五个筛选维度：模型 / Agent / Skill 版本（预设版本戳）/ 测试集 / 用例。
+      // 用例值取 caseId（缺失退回 sourceRef），标签带测试集名便于辨认。
+      const dimOptions = {
+        model: genValues('model'),
+        agent: genValues('agent'),
+        skill: genValues('agentVersion'),
+        set: [...new Set(allArts.map((a) => artMetaOf(a).caseSetId)
+          .filter((v) => typeof v === 'string' && v !== ''))].sort(),
+        case: [...new Set(allArts.map((a) => {
+          const m = artMetaOf(a)
+          const cid = typeof m.caseId === 'string' ? m.caseId : ''
+          const ref = typeof m.sourceRef === 'string' ? m.sourceRef : ''
+          return cid !== '' ? cid : ref
+        }).filter((v) => v !== ''))].sort(),
+      }
+      const dimLabel = (k, v) => {
+        if (k === 'set') return setNameOf(v)
+        if (k === 'case') {
+          const a = allArts.find((x) => {
+            const m = artMetaOf(x)
+            return (typeof m.caseId === 'string' && m.caseId !== '' ? m.caseId
+              : (typeof m.sourceRef === 'string' ? m.sourceRef : '')) === v
+          })
+          const m = artMetaOf(a || {})
+          const ref = typeof m.sourceRef === 'string' && m.sourceRef !== '' ? m.sourceRef : v
+          const setId = typeof m.caseSetId === 'string' ? m.caseSetId : ''
+          return (setId !== '' ? setNameOf(setId) + ' · ' : '') + ref
+        }
+        return v
+      }
+      const artFiltering = Object.keys(dimOptions).some((k) => (artFilter[k] || '') !== '')
       const matchArt = (a) => {
         const g = artGenOf(a)
+        const m = artMetaOf(a)
         if (artFilter.model !== '' && g.model !== artFilter.model) return false
         if (artFilter.agent !== '' && g.agent !== artFilter.agent) return false
+        if ((artFilter.skill || '') !== '' && g.agentVersion !== artFilter.skill) return false
+        if ((artFilter.set || '') !== '' && m.caseSetId !== artFilter.set) return false
+        if ((artFilter.case || '') !== '') {
+          const cid = typeof m.caseId === 'string' ? m.caseId : ''
+          const ref = typeof m.sourceRef === 'string' ? m.sourceRef : ''
+          if ((cid !== '' ? cid : ref) !== artFilter.case) return false
+        }
         return true
       }
-      // 筛选条：只在有产物记录过生成参数时出现；未记录的产物在任何
+      // 筛选条：任一维度有可选值即出现；未记录的产物在任何
       // 具体筛选值下都不匹配。
-      if (modelOptions.length + agentOptions.length > 0) {
-        const filterSelect = (key, options, placeholder) =>
-          React.createElement('select', {
-            className: 'dshmw-select',
-            value: artFilter[key],
-            title: placeholder,
-            onChange: (e) => setArtFilter((prev) => ({ ...prev, [key]: e.target.value })),
-          }, [React.createElement('option', { key: '', value: '' }, placeholder)].concat(
-            options.map((v) => React.createElement('option', { key: v, value: v }, v))))
+      const dims = [
+        ['model', '全部模型'], ['agent', '全部 Agent'], ['skill', '全部 Skill 版本'],
+        ['set', '全部测试集'], ['case', '全部用例'],
+      ]
+      if (dims.some(([k]) => dimOptions[k].length > 0)) {
         hubBody.push(React.createElement('div', { key: 'artfilter', className: 'dshmw-artfilter' },
-          modelOptions.length > 0 ? filterSelect('model', modelOptions, '全部模型') : null,
-          agentOptions.length > 0 ? filterSelect('agent', agentOptions, '全部 Agent') : null))
+          dims.map(([k, placeholder]) => dimOptions[k].length === 0 ? null :
+            React.createElement('select', {
+              key: k,
+              className: 'dshmw-select',
+              value: artFilter[k] || '',
+              title: placeholder,
+              onChange: (e) => setArtFilter((prev) => ({ ...prev, [k]: e.target.value })),
+            }, [React.createElement('option', { key: '', value: '' }, placeholder)].concat(
+              dimOptions[k].map((v) => React.createElement('option', { key: v, value: v }, dimLabel(k, v))))))))
       }
       // 相同用例的产物合并成一组：按批次 meta 的 caseSetId+sourceRef/caseId
       // （缺失退回批次名）归并；组标题可点击折叠/展开。
@@ -1878,7 +2061,7 @@ function MockPanel(props) {
             popRow('模型', typeof pgen.model === 'string' && pgen.model !== '' ? pgen.model : '未记录'),
             popRow('Agent', typeof pgen.agent === 'string' && pgen.agent !== '' ? pgen.agent : '未记录'),
             typeof pgen.agentVersion === 'string' && pgen.agentVersion !== ''
-              ? popRow('Agent 版本', pgen.agentVersion) : null,
+              ? popRow('Skill 版本', pgen.agentVersion) : null,
             popRow('类型', String(pa.kind || '')),
             pa.runtime && pa.runtime.url ? popRow('地址', String(pa.runtime.url)) : null,
             React.createElement('div', { className: 'dshmw-artpophint' },
@@ -1930,6 +2113,10 @@ function CasesResultView(props) {
   const [starting, setStarting] = React.useState(false)
   const [startError, setStartError] = React.useState(null)
   const [confirmDeleteArchiveId, setConfirmDeleteArchiveId] = React.useState(null)
+  // 左栏筛选：搜索串（prompt/编号/标签/测试集名）+ 测试集 + Skill 版本
+  const [caseQuery, setCaseQuery] = React.useState('')
+  const [caseSetFilter, setCaseSetFilter] = React.useState('')
+  const [caseVerFilter, setCaseVerFilter] = React.useState('')
 
   const refresh = React.useCallback(() => {
     hubApi('state', { cache: 'no-store' })
@@ -2021,13 +2208,40 @@ function CasesResultView(props) {
     }
   }
   const cardsKey = cards.map((c) => c.case.id).join('\u0001')
-  // 默认选中最近归档的用例
+  // 筛选维度：搜索（prompt / 编号 / 标签 / 测试集名）+ 测试集 + Skill 版本。
+  // 版本来自归档 record.json 冻结的 gen.agentVersion（仅功能上线后的新归档有，
+  // 旧归档无 gen，选中具体版本时不匹配）。
+  const versByCase = new Map()
+  for (const e of iterations) {
+    const v = e.gen && typeof e.gen.agentVersion === 'string' ? e.gen.agentVersion : ''
+    if (v === '' || typeof e.caseId !== 'string' || e.caseId === '') continue
+    if (!versByCase.has(e.caseId)) versByCase.set(e.caseId, new Set())
+    versByCase.get(e.caseId).add(v)
+  }
+  const verOptions = [...new Set([...versByCase.values()].flatMap((s) => [...s]))].sort()
+  const setOptions = [...new Set(cards.map((c) => c.caseSetId)
+    .filter((v) => typeof v === 'string' && v !== ''))].sort()
+  const caseQueryNorm = caseQuery.trim().toLowerCase()
+  const caseFiltering = caseQueryNorm !== '' || caseSetFilter !== '' || caseVerFilter !== ''
+  const matchCaseCard = ({ case: c, caseSetId }) => {
+    if (caseSetFilter !== '' && caseSetId !== caseSetFilter) return false
+    if (caseVerFilter !== '' && !(versByCase.get(c.id) || new Set()).has(caseVerFilter)) return false
+    if (caseQueryNorm !== '') {
+      const hay = [c.prompt, c.sourceRef, c.id, setNames.get(caseSetId) || caseSetId]
+        .concat(Array.isArray(c.tags) ? c.tags : []).join('\n').toLowerCase()
+      if (!hay.includes(caseQueryNorm)) return false
+    }
+    return true
+  }
+  const viewCards = caseFiltering ? cards.filter(matchCaseCard) : cards
+  const viewKey = viewCards.map((c) => c.case.id).join('\u0001')
+  // 默认选中筛选后最近归档的用例
   React.useEffect(() => {
-    if (cards.length === 0) { setSelectedId(null); return }
-    setSelectedId((cur) => (cards.some((c) => c.case.id === cur) ? cur : cards[0].case.id))
-  }, [cardsKey])
+    if (viewCards.length === 0) { setSelectedId(null); return }
+    setSelectedId((cur) => (viewCards.some((c) => c.case.id === cur) ? cur : viewCards[0].case.id))
+  }, [viewKey])
 
-  const selCard = cards.find((c) => c.case.id === selectedId) || cards[0] || null
+  const selCard = viewCards.find((c) => c.case.id === selectedId) || viewCards[0] || null
 
   // 归档按 caseId 聚合（时间倒序，供右栏历史记录）
   const iterByCase = new Map()
@@ -2098,8 +2312,8 @@ function CasesResultView(props) {
     return React.createElement('div', { className: 'dshmw-traj dshmw-traj-full' }, t.entries.map((e, i) => trajItem(sessionId, e, i)))
   }
 
-  // 左栏：用例列表
-  const leftItems = cards.map(({ case: c, count, latest, caseSetId }) => {
+  // 左栏：用例列表（筛选后）
+  const leftItems = viewCards.map(({ case: c, count, latest, caseSetId }) => {
     const sel = selCard !== null && c.id === selCard.case.id
     const tags = Array.isArray(c.tags) ? c.tags : []
     return React.createElement('button', {
@@ -2237,7 +2451,7 @@ function CasesResultView(props) {
       React.createElement('span', { className: 'dshmw-casestitle' }, '用例结果'),
       React.createElement('span', { className: 'dshmw-casesstatus' }, hub === null ? '探测中' : online ? 'Hub 在线' : 'Hub 未启动'),
       React.createElement('span', { className: 'dshmw-casespag', style: { marginLeft: 'auto' } },
-        archivedCount > 0 ? '有归档结果：' + cards.length + ' 个用例' : ''),
+        archivedCount > 0 ? '有归档结果：' + (caseFiltering ? viewCards.length + '/' : '') + cards.length + ' 个用例' : ''),
       !online && hub !== null
         ? React.createElement('button', {
             type: 'button', className: 'dshmw-cardbtn', disabled: starting,
@@ -2271,6 +2485,34 @@ function CasesResultView(props) {
             : '没有可显示的归档用例。')
       : null,
     online && cards.length > 0
+      ? React.createElement('div', { key: 'casefilter', className: 'dshmw-casesfilterbar' },
+          React.createElement('input', {
+            className: 'dshmw-casesfilter',
+            value: caseQuery,
+            placeholder: '搜索用例：prompt / 编号 / 标签…',
+            title: '按 prompt 全文、用例编号、测试集名、标签过滤左栏用例',
+            onChange: (e) => setCaseQuery(e.target.value),
+          }),
+          setOptions.length > 0
+            ? React.createElement('select', {
+                className: 'dshmw-select', value: caseSetFilter, title: '按测试集筛选',
+                onChange: (e) => setCaseSetFilter(e.target.value),
+              }, [React.createElement('option', { key: '', value: '' }, '全部测试集')].concat(
+                setOptions.map((v) => React.createElement('option', { key: v, value: v }, setNames.get(v) || v))))
+            : null,
+          verOptions.length > 0
+            ? React.createElement('select', {
+                className: 'dshmw-select', value: caseVerFilter, title: '按 Skill 版本筛选（仅功能上线后的新归档记录了版本）',
+                onChange: (e) => setCaseVerFilter(e.target.value),
+              }, [React.createElement('option', { key: '', value: '' }, '全部 Skill 版本')].concat(
+                verOptions.map((v) => React.createElement('option', { key: v, value: v }, v))))
+            : null)
+      : null,
+    online && cards.length > 0 && viewCards.length === 0
+      ? React.createElement('div', { key: 'nocasematch', className: 'dshmw-hint', style: { marginTop: 0 } },
+          '没有符合筛选条件的用例')
+      : null,
+    online && viewCards.length > 0
       ? React.createElement('div', { key: 'cols', className: 'dshmw-cases-cols' },
           React.createElement('div', { className: 'dshmw-cases-left' }, leftItems),
           React.createElement('div', { className: 'dshmw-cases-right' }, rightBody))

@@ -12,6 +12,7 @@
  *   - list-batches：runs 下各批次 meta.json + workspace 关联
  *   - archive-batch / delete-batch / list-directory
  *   - archive-session / snapshot-session：会话归档与会话中途快照（产物快照 + record.json）
+ *   - prepare-case-assets：用例库 attachments/ → 批次 assets/（meta.json 记 assets）
  *
  * 服务均为可选读取（ctx.get + undefined 检查）；mkdir/rm 走 shell 服务，
  * 元数据读写走 fs 服务，注册走 workspaceRegistry。所有目录操作限 mock 根内。
@@ -164,6 +165,36 @@ export function apply(ctx) {
     if (typeof targetPath !== 'string') return false
     const t = targetPath.replace(/[/\\]+$/, '')
     return t === root || t.startsWith(root + '/')
+  }
+
+  // ---- 用例附件工具（prepare-case-assets 用，与动态插件 host.js 逐行等价） ----
+  // 手工路径归一：解析 . / .. 段，防越界。
+  function normalizePath(p) {
+    const raw = String(p || '')
+    const abs = raw.charAt(0) === '/'
+    const parts = []
+    for (const seg of raw.split('/')) {
+      if (seg === '' || seg === '.') continue
+      if (seg === '..') { if (parts.length > 0) parts.pop(); continue }
+      parts.push(seg)
+    }
+    return (abs ? '/' : '') + parts.join('/')
+  }
+  // 附件落盘文件名清洗：去路径分隔符 / 控制字符 / ..，空则退回 'file'。
+  function safeFileName(name) {
+    const cleaned = String(name || '')
+      .replace(/[/\\]/g, '')
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\x00-\x1f\x7f]/g, '')
+      .replace(/\.\./g, '')
+      .trim()
+    return cleaned === '' || cleaned === '.' ? 'file' : cleaned
+  }
+  // 目标重名时加 -2/-3 后缀（插在扩展名前）。
+  function suffixName(name, n) {
+    const dot = name.lastIndexOf('.')
+    if (dot > 0) return name.slice(0, dot) + '-' + n + name.slice(dot)
+    return name + '-' + n
   }
 
   // ---- mkdir（shell 服务跑 mkdir -p） ----
@@ -365,6 +396,8 @@ export function apply(ctx) {
     }
     // 生成参数随记录冻结，归档时间线/产物悬浮窗可回溯当时的模型与 Agent。
     if (meta.gen && typeof meta.gen === 'object') record.gen = meta.gen
+    // 用例附件清单随记录冻结（assets/ 目录由 prepare-case-assets 复制）。
+    if (Array.isArray(meta.assets) && meta.assets.length > 0) record.assets = meta.assets
     if (extra && typeof extra === 'object') Object.assign(record, extra)
     await fswriteFile(pathJoin(archiveDir, 'record.json'), JSON.stringify(record, null, 2), 'utf8')
     return { ok: true, record }
@@ -446,6 +479,58 @@ export function apply(ctx) {
             meta.gen = Object.assign({}, meta.gen && typeof meta.gen === 'object' ? meta.gen : {}, gen)
             await writeMeta(path, meta)
             return { ok: true, meta }
+          }
+          case 'prepare-case-assets': {
+            // 准备用例附件（库 attachments/ → 批次 assets/）：stored 是用例库内
+            // 相对路径（attachments/<setId>/<caseId>/<name>），复制进
+            // <batchPath>/assets/，供批次会话（cwd=批次目录）里的 agent 读取；
+            // 落盘相对路径并入 meta.json 的 assets 字段（并集去重，重复调用幂等）。
+            // 单个文件失败不中断其余。
+            const batchPath = typeof args.batchPath === 'string' ? args.batchPath : ''
+            // batchPath 必须在 mock 根 runs/ 内（沿用 delete-batch 的根内校验模式）。
+            const runsRoot = joinPath(mockRoot(), 'runs')
+            const batchDir = normalizePath(batchPath).replace(/[/\\]+$/, '')
+            if (batchDir === '' || !batchDir.startsWith(runsRoot + '/')) {
+              return { ok: false, error: 'batchPath 不在 mock runs/ 内' }
+            }
+            const files = Array.isArray(args.files) ? args.files : []
+            const caseLibRoot = joinPath(mockRoot(), 'case-library')
+            const attachmentsRoot = joinPath(caseLibRoot, 'attachments')
+            const assetsDir = joinPath(batchDir, 'assets')
+            await fsmkdir(assetsDir, { recursive: true })
+            const assets = []
+            const errors = []
+            for (const file of files) {
+              const stored = file && typeof file.stored === 'string' ? file.stored : ''
+              try {
+                // 解析后必须仍位于 case-library/attachments/ 内（防 .. 越界）。
+                const src = normalizePath(joinPath(caseLibRoot, stored))
+                if (!src.startsWith(attachmentsRoot + '/')) throw new Error('stored 越出 case-library/attachments/')
+                if (!existsSync(src)) throw new Error('附件不存在')
+                const base = safeFileName(file && file.name)
+                let name = base
+                let n = 1
+                while (existsSync(joinPath(assetsDir, name))) {
+                  n += 1
+                  name = suffixName(base, n)
+                }
+                await fscp(src, joinPath(assetsDir, name))
+                assets.push('assets/' + name)
+              } catch (err) {
+                errors.push({ stored, error: errorText(err) })
+              }
+            }
+            // 落盘相对路径并入 meta.json 的 assets 字段（读-合并-写，仿 set-gen）。
+            if (assets.length > 0) {
+              const meta = await readMeta(batchDir)
+              if (meta !== null) {
+                const merged = Array.isArray(meta.assets) ? meta.assets.slice() : []
+                for (const a of assets) if (!merged.includes(a)) merged.push(a)
+                meta.assets = merged
+                await writeMeta(batchDir, meta)
+              }
+            }
+            return { ok: true, assets, errors }
           }
           case 'list-batches': {
             const runs = joinPath(mockRoot(), 'runs')

@@ -424,6 +424,8 @@ async function trajectoryEvents(sessionId) {
 //   cases(set_id, source_ref, id, prompt, language, tags_json, meta_json, created_at)
 //         PRIMARY KEY (set_id, source_ref) ← 去重约束
 //   case_tags(set_id, tag, case_id)       ← 标签筛选/计数的连接表
+//   case_attachments(set_id, case_id, name, stored, size, mime, created_at)
+//         ← 用例附件（资源文件），实体存 case-library/attachments/<setId>/<caseId>/
 // 旧版 JSONL 存储（<setId>/{set.json,cases.jsonl}）在首次打开 DB 时自动迁移
 // 入库（按主键 OR IGNORE，幂等），原文件保留作历史备份。
 
@@ -431,6 +433,7 @@ const LIBRARY_DIR = path.join(MOCK_ROOT, 'case-library')
 const LIBRARY_DB = path.join(LIBRARY_DIR, 'library.db')
 const LIBRARY_MAX_BYTES = 128 * 1024 * 1024
 const UPLOAD_MAX_BYTES = 64 * 1024 * 1024
+const ATTACH_DIR = path.join(LIBRARY_DIR, 'attachments')
 
 let libDb = null
 
@@ -463,6 +466,16 @@ function libOpen() {
     tag TEXT NOT NULL,
     case_id TEXT NOT NULL,
     PRIMARY KEY (set_id, tag, case_id)
+  )`)
+  db.exec(`CREATE TABLE IF NOT EXISTS case_attachments (
+    set_id TEXT NOT NULL,
+    case_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    stored TEXT NOT NULL,
+    size INTEGER NOT NULL DEFAULT 0,
+    mime TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (set_id, case_id, name)
   )`)
   db.exec('CREATE INDEX IF NOT EXISTS idx_case_tags_set ON case_tags(set_id, tag)')
   migrateLegacyLibrary(db)
@@ -641,7 +654,8 @@ function guessMapping(columns) {
   const refColumn = pick(['id', 'uid', 'case_id', 'source_id', 'qid', 'idx', 'name'])
   const languageColumn = pick(['language', 'lang', 'locale'])
   const tagColumns = columns.filter((c) => /^(l\d+_label|platform|category|domain|task|type|split|subject|source)$/i.test(String(c)))
-  return { promptColumn, refColumn, languageColumn, tagColumns }
+  const attachmentColumn = pick(['attachments', 'attachment', 'files', 'file', 'resources', 'resource', 'assets', 'asset', 'documents', 'document'])
+  return { promptColumn, refColumn, languageColumn, tagColumns, attachmentColumn }
 }
 
 function promptHash(prompt) {
@@ -656,7 +670,7 @@ function promptHash(prompt) {
 
 /**
  * 按映射把一条原始行归一化为 Case；prompt 为空返回 null（跳过）。
- * mapping: { promptColumn, refColumn?, languageColumn?, tagColumns?[] }
+ * mapping: { promptColumn, refColumn?, languageColumn?, tagColumns?[], attachmentColumn? }
  */
 function normalizeLibraryCase(obj, mapping, setId) {
   const raw = (k) => {
@@ -673,7 +687,7 @@ function normalizeLibraryCase(obj, mapping, setId) {
     const v = raw(col).trim()
     if (v !== '' && !tags.includes(v)) tags.push(v)
   }
-  const mapped = new Set([mapping.promptColumn, mapping.refColumn, mapping.languageColumn].concat(mapping.tagColumns || []))
+  const mapped = new Set([mapping.promptColumn, mapping.refColumn, mapping.languageColumn, mapping.attachmentColumn].concat(mapping.tagColumns || []))
   const meta = {}
   for (const k of Object.keys(obj)) {
     if (mapped.has(k)) continue
@@ -699,6 +713,89 @@ function slugifySetId(name) {
   return s === '' ? 'set' : s
 }
 
+/**
+ * 导入路径安全边界：仅允许白名单根下的普通数据文件，拒绝敏感目录/密钥文件
+ * （Hub API 带 CORS *，任意外网页面都能调用，本地文件读取必须收口）。
+ * 白名单：HOME、mock 根、mock 根的父目录（benchmark 数据集常与其并列，
+ * 如 playground/tubiao_pg），另可用 ARTIFACT_HUB_IMPORT_ROOTS（冒号分隔）追加。
+ * 不合法时抛错（message 为原因）。
+ */
+function assertImportPathAllowed(p) {
+  if (typeof p !== 'string' || p === '') throw new Error('路径为空')
+  if (!path.isAbsolute(p)) throw new Error('path 必须是绝对路径')
+  const roots = [os.homedir(), MOCK_ROOT, path.dirname(MOCK_ROOT)]
+  for (const extra of String(process.env.ARTIFACT_HUB_IMPORT_ROOTS || '').split(':')) {
+    if (extra !== '') roots.push(extra)
+  }
+  const allowed = roots.some((root) => p === root || p.startsWith(root.replace(/[/\\]+$/, '') + path.sep))
+  if (!allowed) throw new Error('路径不在允许范围内（HOME / mock 根及其父目录，可用 ARTIFACT_HUB_IMPORT_ROOTS 追加）')
+  if (/(^|[/\\])\.(ssh|aws|gnupg|config[/\\]gcloud)([/\\]|$)/.test(p)) throw new Error('拒绝读取敏感目录')
+  if (/(^|[/\\])[^\s]*\.(pem|key|p12|pfx)$/.test(p)) throw new Error('拒绝读取密钥文件')
+}
+
+/** 清洗附件文件名：去分隔符/控制字符与 . .. 段，空则退回 'file'。 */
+function safeFileName(name) {
+  const segs = String(name === undefined || name === null ? '' : name)
+    .replace(/[\x00-\x1f\x7f]+/g, '')
+    .split(/[/\\]+/)
+    .filter((seg) => seg !== '' && seg !== '.' && seg !== '..')
+  const s = (segs.length > 0 ? segs[segs.length - 1] : '').trim()
+  return s === '' ? 'file' : s
+}
+
+/** 附件 MIME：按扩展名小表，缺省 application/octet-stream。 */
+function mimeOf(name) {
+  const ext = path.extname(String(name)).toLowerCase()
+  const table = {
+    '.pdf': 'application/pdf',
+    '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+    '.webp': 'image/webp', '.gif': 'image/gif',
+    '.csv': 'text/csv; charset=utf-8', '.json': 'application/json; charset=utf-8',
+    '.txt': 'text/plain; charset=utf-8', '.md': 'text/markdown; charset=utf-8',
+    '.zip': 'application/zip',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  }
+  return table[ext] || MIME[ext] || 'application/octet-stream'
+}
+
+/**
+ * 把源文件复制进附件库 attachments/<setId>/<caseId>/。
+ * 同名同 size 直接复用（幂等）；同名不同 size 加 -2/-3 后缀。
+ * 返回 { name, stored, size, mime }，stored 为相对 LIBRARY_DIR 的正斜杠路径。
+ */
+function copyAttachmentInto(setId, caseId, srcAbsPath) {
+  const dir = path.join(ATTACH_DIR, setId, caseId)
+  fs.mkdirSync(dir, { recursive: true })
+  const base = safeFileName(path.basename(srcAbsPath))
+  const srcSize = fs.statSync(srcAbsPath).size
+  const dot = base.lastIndexOf('.')
+  const stem = dot > 0 ? base.slice(0, dot) : base
+  const ext = dot > 0 ? base.slice(dot) : ''
+  let name = base
+  for (let i = 2; ; i++) {
+    const target = path.join(dir, name)
+    let st = null
+    try { st = fs.statSync(target) } catch { /* 不存在 */ }
+    if (st === null) { fs.copyFileSync(srcAbsPath, target); break }
+    if (st.isFile() && st.size === srcSize) break
+    name = stem + '-' + i + ext
+  }
+  return {
+    name,
+    stored: path.posix.join('attachments', setId, caseId, name),
+    size: srcSize,
+    mime: mimeOf(name),
+  }
+}
+
+/** 读某 case 的全量附件（created_at 升序）。 */
+function libAttachmentsOf(db, setId, caseId) {
+  return db.prepare('SELECT name, size, mime, stored FROM case_attachments WHERE set_id = ? AND case_id = ? ORDER BY created_at, name')
+    .all(setId, caseId)
+}
+
 /** 读取数据集文本：path（服务器本地文件）或 content（上传文本）二选一。 */
 async function readDatasetText(body) {
   const content = body.content
@@ -708,19 +805,11 @@ async function readDatasetText(body) {
   }
   const p = String(body.path || '')
   if (p === '') return { error: '缺 path 或 content' }
-  if (!path.isAbsolute(p)) return { error: 'path 必须是绝对路径' }
-  // 安全边界：仅允许白名单根下的普通数据文件，拒绝敏感目录/密钥文件
-  // （Hub API 带 CORS *，任意外网页面都能调用，本地文件读取必须收口）。
-  // 白名单：HOME、mock 根、mock 根的父目录（benchmark 数据集常与其并列，
-  // 如 playground/tubiao_pg），另可用 ARTIFACT_HUB_IMPORT_ROOTS（冒号分隔）追加。
-  const roots = [os.homedir(), MOCK_ROOT, path.dirname(MOCK_ROOT)]
-  for (const extra of String(process.env.ARTIFACT_HUB_IMPORT_ROOTS || '').split(':')) {
-    if (extra !== '') roots.push(extra)
+  try {
+    assertImportPathAllowed(p)
+  } catch (err) {
+    return { error: errorText(err) }
   }
-  const allowed = roots.some((root) => p === root || p.startsWith(root.replace(/[/\\]+$/, '') + path.sep))
-  if (!allowed) return { error: '路径不在允许范围内（HOME / mock 根及其父目录，可用 ARTIFACT_HUB_IMPORT_ROOTS 追加）' }
-  if (/(^|[/\\])\.(ssh|aws|gnupg|config[/\\]gcloud)([/\\]|$)/.test(p)) return { error: '拒绝读取敏感目录' }
-  if (/(^|[/\\])[^\s]*\.(pem|key|p12|pfx)$/.test(p)) return { error: '拒绝读取密钥文件' }
   try {
     const stat = await fsp.stat(p)
     if (!stat.isFile()) return { error: '不是文件: ' + p }
@@ -732,7 +821,7 @@ async function readDatasetText(body) {
   }
 }
 
-function libCaseView(row) {
+function libCaseView(row, attachments) {
   return {
     id: row.id,
     setId: row.set_id,
@@ -742,6 +831,7 @@ function libCaseView(row) {
     tags: jsonParse(row.tags, []),
     meta: jsonParse(row.meta, {}),
     createdAt: row.created_at,
+    attachments: Array.isArray(attachments) ? attachments : [],
   }
 }
 
@@ -799,6 +889,13 @@ async function apiLibrary(req, res, u) {
     if (!data.columns.includes(mapping.promptColumn)) {
       sendJson(res, 400, { ok: false, error: 'prompt 列不存在: ' + mapping.promptColumn }); return true
     }
+    // 可选附件列：单元格按 ; 或换行分隔多个路径
+    const attCol = typeof mapping.attachmentColumn === 'string' && mapping.attachmentColumn !== '' ? mapping.attachmentColumn : ''
+    if (attCol !== '' && !data.columns.includes(attCol)) {
+      sendJson(res, 400, { ok: false, error: '附件列不存在: ' + attCol }); return true
+    }
+    // path 导入时相对附件路径相对数据集文件所在目录 resolve；content 导入无基准目录
+    const baseDir = src.sourcePath ? path.dirname(src.sourcePath) : null
     // 目标集：显式 setId 合并导入，否则按名称生成唯一 slug
     let setId = typeof body.setId === 'string' && /^[\w.-]+$/.test(body.setId) ? body.setId : ''
     let setRow = null
@@ -818,8 +915,11 @@ async function apiLibrary(req, res, u) {
     const insSet = db.prepare('INSERT OR IGNORE INTO sets (id, name, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
     const insCase = db.prepare('INSERT OR IGNORE INTO cases (set_id, source_ref, id, prompt, language, tags, meta, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
     const insTag = db.prepare('INSERT OR IGNORE INTO case_tags (set_id, tag, case_id) VALUES (?, ?, ?)')
+    const insAtt = db.prepare('INSERT OR IGNORE INTO case_attachments (set_id, case_id, name, stored, size, mime, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
     let imported = 0
     let skipped = 0
+    let attached = 0
+    let missingFiles = 0
     db.exec('BEGIN')
     try {
       insSet.run(setId, String(body.name || setId), JSON.stringify({
@@ -836,6 +936,32 @@ async function apiLibrary(req, res, u) {
         } else {
           skipped++
         }
+        // 附件登记对已存在的 case 同样执行（不依赖 insCase 命中），
+        // 重复导入幂等：同名同 size 复用文件 + INSERT OR IGNORE
+        if (attCol !== '') {
+          const cell = obj[attCol]
+          const cellText = cell === undefined || cell === null ? '' : (typeof cell === 'string' ? cell : String(cell))
+          for (const piece of cellText.split(/[;\n]+/)) {
+            const rel = piece.trim()
+            if (rel === '') continue
+            let abs = rel
+            if (!path.isAbsolute(abs)) {
+              if (baseDir === null) { missingFiles++; continue }
+              abs = path.resolve(baseDir, rel)
+            }
+            try {
+              assertImportPathAllowed(abs)
+              const stat = fs.statSync(abs)
+              if (!stat.isFile()) throw new Error('不是文件')
+              if (stat.size > LIBRARY_MAX_BYTES) throw new Error('文件超过 128MB 上限')
+              const rec = copyAttachmentInto(c.setId, c.id, abs)
+              const ar = insAtt.run(c.setId, c.id, rec.name, rec.stored, rec.size, rec.mime, now)
+              if (ar.changes > 0) attached++
+            } catch {
+              missingFiles++
+            }
+          }
+        }
       }
       // 合并导入时更新名称/映射快照与 updated_at
       db.prepare('UPDATE sets SET name = ?, source = ?, updated_at = ? WHERE id = ?').run(
@@ -849,7 +975,7 @@ async function apiLibrary(req, res, u) {
       return true
     }
     const meta = libSetView(db, db.prepare('SELECT * FROM sets WHERE id = ?').get(setId))
-    sendJson(res, 200, { ok: true, value: { set: meta, imported, skipped } })
+    sendJson(res, 200, { ok: true, value: { set: meta, imported, skipped, attached, missingFiles } })
     return true
   }
   // 用例查询：tag / q（prompt、sourceRef 子串）筛选 + 分页
@@ -884,9 +1010,28 @@ async function apiLibrary(req, res, u) {
     const total = db.prepare('SELECT COUNT(*) AS n FROM cases' + cond).get(...params).n
     const rows = db.prepare('SELECT * FROM cases' + cond + ' ORDER BY created_at, source_ref LIMIT ? OFFSET ?')
       .all(...params, limit, offset)
+    // 批量取当前页附件（按 (set_id, case_id) 对匹配，setId 省略时跨集也正确），避免 N+1
+    const attMap = new Map()
+    if (rows.length > 0) {
+      const pairCond = rows.map(() => '(set_id = ? AND case_id = ?)').join(' OR ')
+      const pairParams = []
+      for (const r of rows) pairParams.push(r.set_id, r.id)
+      const attRows = db.prepare('SELECT set_id, case_id, name, size, mime, stored FROM case_attachments WHERE '
+        + pairCond + ' ORDER BY created_at, name').all(...pairParams)
+      for (const a of attRows) {
+        const key = a.set_id + '\0' + a.case_id
+        let list = attMap.get(key)
+        if (!list) { list = []; attMap.set(key, list) }
+        list.push({ name: a.name, size: a.size, mime: a.mime, stored: a.stored })
+      }
+    }
     sendJson(res, 200, {
       ok: true,
-      value: { total, offset, limit, cases: rows.map(libCaseView), set: setRow ? libSetView(db, setRow) : null },
+      value: {
+        total, offset, limit,
+        cases: rows.map((r) => libCaseView(r, attMap.get(r.set_id + '\0' + r.id))),
+        set: setRow ? libSetView(db, setRow) : null,
+      },
     })
     return true
   }
@@ -897,6 +1042,7 @@ async function apiLibrary(req, res, u) {
     if (setRow === null) { sendJson(res, 404, { ok: false, error: '用例集不存在' }); return true }
     db.exec('BEGIN')
     try {
+      db.prepare('DELETE FROM case_attachments WHERE set_id = ?').run(setRow.id)
       db.prepare('DELETE FROM case_tags WHERE set_id = ?').run(setRow.id)
       db.prepare('DELETE FROM cases WHERE set_id = ?').run(setRow.id)
       db.prepare('DELETE FROM sets WHERE id = ?').run(setRow.id)
@@ -906,7 +1052,77 @@ async function apiLibrary(req, res, u) {
       sendJson(res, 500, { ok: false, error: '删除失败: ' + errorText(err) })
       return true
     }
+    // 提交后清理附件目录（setId 过 safeRelPath 同款校验防越界）
+    const segs = safeRelPath([setRow.id])
+    if (segs !== null && segs.length === 1) {
+      fs.rmSync(path.join(ATTACH_DIR, segs[0]), { recursive: true, force: true })
+    }
     sendJson(res, 200, { ok: true, value: { deleted: setRow.id } })
+    return true
+  }
+  // 挂载附件：{ setId, caseId, paths: [绝对路径...] }；单文件失败记入 errors 不中断
+  if (urlPath === '/api/library/attach' && req.method === 'POST') {
+    const body = await readBody(req)
+    const setId = String(body.setId || '')
+    const caseId = String(body.caseId || '')
+    const caseRow = db.prepare('SELECT id FROM cases WHERE set_id = ? AND id = ?').get(setId, caseId)
+    if (!caseRow) { sendJson(res, 404, { ok: false, error: '用例不存在: ' + setId + '/' + caseId }); return true }
+    if (!Array.isArray(body.paths)) { sendJson(res, 400, { ok: false, error: 'paths 必须是数组' }); return true }
+    const insAtt = db.prepare('INSERT OR IGNORE INTO case_attachments (set_id, case_id, name, stored, size, mime, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    const errors = []
+    for (const raw of body.paths) {
+      const p = typeof raw === 'string' ? raw : String(raw === undefined || raw === null ? '' : raw)
+      try {
+        assertImportPathAllowed(p)
+        const stat = await fsp.stat(p)
+        if (!stat.isFile()) throw new Error('不是文件: ' + p)
+        if (stat.size > LIBRARY_MAX_BYTES) throw new Error('文件超过 128MB 上限')
+        const rec = copyAttachmentInto(setId, caseId, p)
+        insAtt.run(setId, caseId, rec.name, rec.stored, rec.size, rec.mime, Date.now())
+      } catch (err) {
+        errors.push({ path: p, error: errorText(err) })
+      }
+    }
+    sendJson(res, 200, { ok: true, value: { attachments: libAttachmentsOf(db, setId, caseId), errors } })
+    return true
+  }
+  // 卸载附件：{ setId, caseId, name }；删表行 + 删库内文件（文件不存在不报错）
+  if (urlPath === '/api/library/detach' && req.method === 'POST') {
+    const body = await readBody(req)
+    const setId = String(body.setId || '')
+    const caseId = String(body.caseId || '')
+    const name = String(body.name || '')
+    const row = db.prepare('SELECT stored FROM case_attachments WHERE set_id = ? AND case_id = ? AND name = ?').get(setId, caseId, name)
+    if (!row) { sendJson(res, 404, { ok: false, error: '附件不存在: ' + name }); return true }
+    db.prepare('DELETE FROM case_attachments WHERE set_id = ? AND case_id = ? AND name = ?').run(setId, caseId, name)
+    fs.rmSync(path.join(LIBRARY_DIR, ...String(row.stored).split('/')), { force: true })
+    sendJson(res, 200, { ok: true, value: { attachments: libAttachmentsOf(db, setId, caseId) } })
+    return true
+  }
+  // 下载附件：/api/library/attachment-file?setId=&caseId=&name=
+  if (urlPath === '/api/library/attachment-file' && req.method === 'GET') {
+    const setId = String(u.searchParams.get('setId') || '')
+    const caseId = String(u.searchParams.get('caseId') || '')
+    const name = String(u.searchParams.get('name') || '')
+    const row = db.prepare('SELECT stored, mime FROM case_attachments WHERE set_id = ? AND case_id = ? AND name = ?').get(setId, caseId, name)
+    if (!row) { sendJson(res, 404, { ok: false, error: '附件不存在' }); return true }
+    const abs = path.join(LIBRARY_DIR, ...String(row.stored).split('/'))
+    // realpath 双重校验：文件真实路径必须落在 ATTACH_DIR 内（防 stored 被篡改越界）
+    const realBase = await fsp.realpath(ATTACH_DIR).catch(() => null)
+    const realFile = await fsp.realpath(abs).catch(() => null)
+    if (realBase === null || realFile === null || !realFile.startsWith(realBase + path.sep)) {
+      sendJson(res, 404, { ok: false, error: '附件文件不存在' }); return true
+    }
+    const stat = await fsp.stat(realFile).catch(() => null)
+    if (!stat || !stat.isFile()) { sendJson(res, 404, { ok: false, error: '附件文件不存在' }); return true }
+    res.writeHead(200, {
+      'content-type': row.mime || mimeOf(name),
+      'content-disposition': "inline; filename*=UTF-8''" + encodeURIComponent(name),
+      'cache-control': 'no-cache',
+      'access-control-allow-origin': '*',
+    })
+    if (req.method === 'HEAD') { res.end(); return true }
+    res.end(await fsp.readFile(realFile))
     return true
   }
   return false

@@ -2,8 +2,9 @@
 // 临时实验场（mock workspace）的批次管理。每个「批次 batch」= mock 根下
 // runs/<batchId>/ 一个真实目录：
 //   - 目录由本插件用 `shell` 跑 `mkdir -p` 创建（fs 服务没有 mkdir）
-//   - meta.json 记录 { batchId, name, createdAt, status, gen? }
-//     （gen = 生成参数 { model, agent, agentVersion? }，面板悬浮窗展示与筛选用）
+//   - meta.json 记录 { batchId, name, createdAt, status, gen?, assets? }
+//     （gen = 生成参数 { model, agent, agentVersion? }，面板悬浮窗展示与筛选用；
+//      assets = 用例附件落盘相对路径列表，mock.prepare-case-assets 写入）
 //   - 目录注册为正式 workspace（workspaceRegistry.create），会话 cwd 指向
 //     批次目录时自动归组（sessionIds 由 canonical-cwd 索引提供）
 //   - 轨迹 = DSH 会话日志（打开会话即达）；产物 = 会话在批次目录里生成的文件
@@ -280,6 +281,103 @@ return {
       }
     })
 
+    // ---- 用例附件工具（prepare-case-assets 用） ----
+    // 手工路径归一（无 path.resolve 全局）：解析 . / .. 段，防越界。
+    function normalizePath(p) {
+      const raw = String(p || '')
+      const abs = raw.charAt(0) === '/'
+      const parts = []
+      for (const seg of raw.split('/')) {
+        if (seg === '' || seg === '.') continue
+        if (seg === '..') { if (parts.length > 0) parts.pop(); continue }
+        parts.push(seg)
+      }
+      return (abs ? '/' : '') + parts.join('/')
+    }
+    // 附件落盘文件名清洗：去路径分隔符 / 控制字符 / ..，空则退回 'file'。
+    function safeFileName(name) {
+      const cleaned = String(name || '')
+        .replace(/[/\\]/g, '')
+        .replace(/[\x00-\x1f\x7f]/g, '')
+        .replace(/\.\./g, '')
+        .trim()
+      return cleaned === '' || cleaned === '.' ? 'file' : cleaned
+    }
+    // 目标重名时加 -2/-3 后缀（插在扩展名前）。
+    function suffixName(name, n) {
+      const dot = name.lastIndexOf('.')
+      if (dot > 0) return name.slice(0, dot) + '-' + n + name.slice(dot)
+      return name + '-' + n
+    }
+    // 单文件复制（shell cp，引号转义同 copyTree 的 cpOne）。
+    async function copyFile(src, dest) {
+      if (shell === undefined) throw new Error('shell 服务不可用')
+      const request = { command: 'cp "' + src.replace(/"/g, '\\"') + '" "' + dest.replace(/"/g, '\\"') + '"' }
+      let spec
+      try { spec = shell.resolve(request) } catch (err) { spec = request }
+      const result = await shell.run(spec)
+      if (result.exitCode !== 0) {
+        throw new Error('复制失败: ' + (result.stderr || result.stdout || 'unknown'))
+      }
+    }
+
+    // ---- RPC：准备用例附件（库 attachments/ → 批次 assets/） ----
+    // args: { batchPath, files: [{ stored, name }] }。stored 是用例库内相对路径
+    // （attachments/<setId>/<caseId>/<name>），复制进 <batchPath>/assets/，供批次
+    // 会话（cwd=批次目录）里的 agent 读取；落盘相对路径并入 meta.json 的 assets
+    // 字段（并集去重，重复调用幂等）。单个文件失败不中断其余。
+    harness.handle('mock.prepare-case-assets', async (args) => {
+      try {
+        const batchPath = args && typeof args.batchPath === 'string' ? args.batchPath : ''
+        // batchPath 必须在 mock 根 runs/ 内（沿用 delete-batch 的根内校验模式）。
+        const runsRoot = joinPath(mockRoot(), 'runs')
+        const batchDir = normalizePath(batchPath).replace(/[/\\]+$/, '')
+        if (batchDir === '' || !batchDir.startsWith(runsRoot + '/')) {
+          return { ok: false, error: 'batchPath 不在 mock runs/ 内' }
+        }
+        const files = args && Array.isArray(args.files) ? args.files : []
+        const caseLibRoot = joinPath(mockRoot(), 'case-library')
+        const attachmentsRoot = joinPath(caseLibRoot, 'attachments')
+        const assetsDir = joinPath(batchDir, 'assets')
+        await mkdirp(assetsDir)
+        const assets = []
+        const errors = []
+        for (const file of files) {
+          const stored = file && typeof file.stored === 'string' ? file.stored : ''
+          try {
+            // 解析后必须仍位于 case-library/attachments/ 内（防 .. 越界）。
+            const src = normalizePath(joinPath(caseLibRoot, stored))
+            if (!src.startsWith(attachmentsRoot + '/')) throw new Error('stored 越出 case-library/attachments/')
+            if (!(await statExists(src))) throw new Error('附件不存在')
+            const base = safeFileName(file && file.name)
+            let name = base
+            let n = 1
+            while (await statExists(joinPath(assetsDir, name))) {
+              n += 1
+              name = suffixName(base, n)
+            }
+            await copyFile(src, joinPath(assetsDir, name))
+            assets.push('assets/' + name)
+          } catch (err) {
+            errors.push({ stored, error: errorText(err) })
+          }
+        }
+        // 落盘相对路径并入 meta.json 的 assets 字段（读-合并-写，仿 mock.set-gen）。
+        if (assets.length > 0) {
+          const meta = await readMeta(batchDir)
+          if (meta !== null) {
+            const merged = Array.isArray(meta.assets) ? meta.assets.slice() : []
+            for (const a of assets) if (!merged.includes(a)) merged.push(a)
+            meta.assets = merged
+            await writeMeta(batchDir, meta)
+          }
+        }
+        return { ok: true, assets, errors }
+      } catch (err) {
+        return { ok: false, error: errorText(err) }
+      }
+    })
+
     // ---- RPC：列出全部批次（runs/*/meta.json + cwd 前缀匹配会话） ----
     // 返回 [{ batchId, path, meta, sessionIds }]
     harness.handle('mock.list-batches', async () => {
@@ -528,6 +626,8 @@ return {
       }
       // 生成参数随记录冻结，归档时间线/产物悬浮窗可回溯当时的模型与 Agent。
       if (meta.gen && typeof meta.gen === 'object') record.gen = meta.gen
+      // 用例附件清单随记录冻结（assets/ 目录由 mock.prepare-case-assets 复制）。
+      if (Array.isArray(meta.assets) && meta.assets.length > 0) record.assets = meta.assets
       if (extra && typeof extra === 'object') Object.assign(record, extra)
       const recordTarget = await resolveTarget(joinPath(archiveDir, 'record.json'))
       await fs.writeText(recordTarget, JSON.stringify(record, null, 2))

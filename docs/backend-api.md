@@ -143,5 +143,11 @@ Content-Type: application/json
 - **目录（产物）**：`POST /api/host.listDirectory { path }`（或插件自带
   `/mock/list-directory` 走 `fs.listDir`，二者等价）。
 - **方法名是单数**：`session.*`（不是 `sessions.*`）、`workspace.*`、`host.*`。
+- **prompt 附件限制**：`session.prompt` 的 `content` 只支持 `{type:'text'}` 与
+  `{type:'image', data: base64}`（仅 png/jpeg/webp/gif，需模型声明 image 模态）；
+  没有文件/PDF 上传 API。要让 agent 读 PDF 等文件：把文件复制进会话 cwd
+  （mock 场景 = 批次目录），在 prompt 文本里引用相对路径，agent 用自己的
+  shell 工具（如 `pdftotext`）提取——mock 插件的 `mock.prepare-case-assets`
+  走的就是这条路。
 - **Host 侧实体字段**：`workspaceRegistry.create()` 返回 `{ id, path, title, sessionIds }`；
   wire 层 `WorkspaceView` 用 `workspaceId`。

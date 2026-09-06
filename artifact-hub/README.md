@@ -83,40 +83,59 @@ node artifact-hub/server.mjs
 Case 规范形态（导入时归一化）：
 
 ```
-{ id, setId, sourceRef, prompt, language, tags[], meta{} }
+{ id, setId, sourceRef, prompt, language, tags[], meta{}, attachments[] }
 ```
 
 - `prompt`：唯一必填的一等公民
 - `sourceRef`：源数据集原始 id（去重 + 回溯纽带），缺失时取 prompt 的 FNV 哈希
 - `tags`：扁平筛选维度（从映射指定列抽取）
 - `meta`：**不透明袋子**——原始行其余列原样保留，schema 不解释（评测/分析时取数）
+- `attachments`：配套资源文件（如产业报告 PDF），`[{name, size, mime, stored}]`；
+  `stored` 是相对 case-library 目录的库内路径
 
 存储：**SQLite**（`node:sqlite` 内置，零依赖，需 Node ≥22.5），单文件
-`<mock 根>/case-library/library.db`（WAL 模式，重启不丢）。三张表：
+`<mock 根>/case-library/library.db`（WAL 模式，重启不丢）。四张表：
 `sets` / `cases`（`PRIMARY KEY (set_id, source_ref)` 即去重约束）/
-`case_tags`（标签筛选与计数的连接表）。旧版 `<setId>/{set.json, cases.jsonl}`
+`case_tags`（标签筛选与计数的连接表）/ `case_attachments`（附件登记，
+`PRIMARY KEY (set_id, case_id, name)`）。旧版 `<setId>/{set.json, cases.jsonl}`
 目录在首次打开 DB 时自动迁移入库（幂等），原文件保留作历史备份。
+
+附件文件本体在 `<mock 根>/case-library/attachments/<setId>/<caseId>/<name>`——
+挂载时**复制**进库（源文件移动/删除不影响用例）；同名同 size 复用不重复复制，
+同名异 size 加 `-2` 后缀；删除用例集时连带删除 `attachments/<setId>/` 目录。
 
 ```
 GET  /api/library/sets
 POST /api/library/preview     { path|content, fileName?, format? } → 列名+样例行+猜测映射（不写盘）
-POST /api/library/import      { path|content, name?, setId?, mapping{ promptColumn, refColumn?, languageColumn?, tagColumns?[] } }
+POST /api/library/import      { path|content, name?, setId?, mapping{ promptColumn, refColumn?, languageColumn?, tagColumns?[], attachmentColumn? } }
+                              → { set, imported, skipped, attached, missingFiles }
 GET  /api/library/cases?setId=&tag=&q=&ids=&offset=&limit=   （limit ≤ 200；`ids` 为逗号分隔的用例 id 过滤，可省略 setId）
 POST /api/library/delete-set  { setId }
+POST /api/library/attach      { setId, caseId, paths: [绝对路径...] } → { attachments, errors }
+POST /api/library/detach      { setId, caseId, name } → { attachments }
+GET  /api/library/attachment-file?setId=&caseId=&name=   → 附件内容（inline 伺服，预览/下载）
 ```
 
 - 解析器：CSV（RFC-4180：引号/转义/字段内换行）/ JSONL / JSON（数组或
   `{data|items|rows:[]}`）；格式省略时按扩展名猜，退回 csv
 - 映射自动猜测：prompt 列认 `query_text/prompt/question/input/query/…`，
-  标签列认 `l\d+_label/platform/category/domain/…`，可在面板导入表单里改
+  标签列认 `l\d+_label/platform/category/domain/…`，附件列认
+  `attachments/files/resources/assets/documents/…`，可在面板导入表单里改
+- 附件列：单元格按 `;` 或换行分隔多个文件路径；path 导入时相对路径相对
+  数据集文件所在目录解析，content 导入（粘贴文本）时仅接受绝对路径；
+  单文件 ≤ 128MB，复制进库并登记 case_attachments
 - 重复导入同一 `setId` 按 `sourceRef` 去重合并；不指定 `setId` 则按名称生成
-  唯一 slug 建新集
+  唯一 slug 建新集；附件登记对已存在用例同样执行（幂等，重复导入可补齐附件）
 - 路径导入安全边界：仅允许 HOME、mock 根及其**父目录**（benchmark 数据集常与
   mock 根并列），拒绝 `.ssh/.aws/.gnupg` 等敏感目录与 `*.pem/*.key` 密钥文件；
-  额外白名单用 `ARTIFACT_HUB_IMPORT_ROOTS`（冒号分隔）追加
+  额外白名单用 `ARTIFACT_HUB_IMPORT_ROOTS`（冒号分隔）追加。
+  `attach` 端点与导入附件列走同一套边界校验
 
 管理入口：Mock 实验场侧边栏面板「用例库」卡片（集选择 + 标签筛选 + 两步
-导入表单：解析 → 字段映射 + 样例预览 → 确认导入）。
+导入表单：解析 → 字段映射 + 样例预览 → 确认导入；用例行展开可手动挂载/移除
+附件，点附件名新标签预览）。「用该用例开跑」时附件由插件 Host 复制进批次
+目录 `assets/` 并在 prompt 末尾追加材料清单（dsh prompt API 只支持文本与
+图片，文件走会话 cwd 传递）。
 
 ## 用例迭代（会话归档时间线）
 

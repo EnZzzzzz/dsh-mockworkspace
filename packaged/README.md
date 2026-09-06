@@ -100,9 +100,11 @@ Mock 根目录**可配置**，持久化在 `~/.dsh/mock-workspace.json`（`{"roo
 
 面板第二张卡片「用例库」：benchmark 测试用例（prompt）的导入与管理。
 **导入**按钮打开两步表单：① 数据集绝对路径（推荐大文件）或文件上传 →
-「解析」；② 确认字段映射（prompt 列必选，id/语言列可空，标签列勾选，其余
+「解析」；② 确认字段映射（prompt 列必选，id/语言列可空，标签列勾选，
+附件列可选——列内是文件路径，多个用 `;` 分隔，导入时复制进库，其余
 列自动进 meta 不透明保留）+ 样例预览 → 「确认导入」。列表区按用例集 +
-标签筛选浏览（sourceRef + prompt 预览，点击展开全文），集可删除（二次确认）。
+标签筛选浏览（sourceRef + prompt 预览 + 附件 chips，点击展开全文；
+展开态可手动挂载/移除附件、点附件名新标签预览），集可删除（二次确认）。
 
 语义层：CaseSet / Case / Importer，导入时归一化、meta 不透明保留；存储与
 API 由 artifact-hub 承载（SQLite：`<mock 根>/case-library/library.db`，详见
@@ -165,7 +167,11 @@ Mock 实验场批次下刷新可见）——多轮调优 + 恢复现场的入口
 **用例关联**：用例库右键菜单「用该用例开跑」→ 建批次时 `meta` 写入
 `caseId/caseSetId/sourceRef/promptHash`，并开会话 + prompt 预填输入框；
 这样归档记录按用例聚合，形成迭代链。普通新建批次照常归档，归入
-「未关联用例」。
+「未关联用例」。用例带附件时，开跑会先经 `prepare-case-assets` 把库内
+附件复制进批次 `assets/`（落盘清单写 meta.json `assets`，随归档 record.json
+冻结），并在预填 prompt 末尾追加「随附材料」段落——dsh 的 prompt API 只
+支持文本与图片，文件走会话 cwd（= 批次目录）传递，agent 用 shell 工具
+（如 pdftotext）读取。
 
 > 注意：Host 半边改动需**重启 dsh** 生效（client bundle 刷新页面即可）。
 
