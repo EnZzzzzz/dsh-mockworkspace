@@ -94,6 +94,30 @@ mock-workspace archive list --case-id CASE_ID
 
 需要预览时，从 `state` 获取真实 artifact id，再 `artifact start --id ARTIFACT_ID`；用 `artifact log` 排查失败，用 `artifact stop` 停止对应进程。
 
+### 归档失败时的手动补救
+
+归档失败不等于网页没有生成。先记录失败命令输出中的 `batchId`、`sessionId`，再检查该批次目录及其子目录：
+
+```sh
+mock-workspace state --timeout 10000
+mock-workspace task sessions --batch-id BATCH_ID
+mock-workspace task events --session-id SESSION_ID
+find /absolute/mock/root/runs/BATCH_ID -maxdepth 5 -type f \( -name 'index.html' -o -name '*.html' \) -print
+```
+
+优先确认真正的成品入口，不要把 `work/page.html`、开发服务器临时文件或源码目录误当成成品。对于 React/Vite/Next 等项目，若只有源码和 `package.json`，在批次目录中按其 lockfile 使用对应包管理器安装依赖并执行 `npm run build`、`pnpm run build` 或项目声明的 build 命令；确认 `dist/`、`out/` 或静态站点目录中有 HTML、CSS、JS 后再补归档。构建可能改变文件时，先复制到临时目录操作，并保留失败日志。
+
+如果自动归档已经写出失败记录但没有成功页面，可使用仓库提供的补救脚本从当前批次文件重建快照：
+
+```sh
+node /absolute/path/to/dsh-mockworkspace/packaged/repair-archives.mjs \
+  /absolute/mock/root/case-library/archives/BATCH_ID/TIMESTAMP/record.json
+```
+
+脚本会在临时副本中构建、复制完整网页并修正 HTML/JS/CSS/图片的归档路径，然后更新 `record.json`；旧记录和旧快照会保留备份。若脚本不可用，也可以手动把最终 `dist/`、`out/` 或静态站点目录复制到 `case-library/archives/BATCH_ID/TIMESTAMP/<snapshotDir>/`，并在 `record.json` 的 `artifacts` 中登记 `snapshotDir` 与 `entryFile`。复制完成后用 `/archive/BATCH_ID/TIMESTAMP/<snapshotDir>/` 打开预览，检查浏览器 Network 中 CSS、JS、字体和图片没有 404，再运行 `mock-workspace archive list --case-id CASE_ID` 核对记录。
+
+手动补归档时不要覆盖原始失败记录；若当前批次内容已经被后续迭代改写，应在记录中注明这是“从当前批次文件补建”的快照，而不是声称恢复了归档当时的精确状态。纯文本任务可以保留没有 `artifacts` 的归档；本应有网页但暂时找不到入口时，应报告为未完成并继续排查，不能把空产物当作成功。
+
 ## 试用交付
 
 用户要求完整试用且未指定内容时，可采用上面的纯 HTML 计数器用例：新建专用试用集、添加用例、创建一个任务、确认执行结果、创建一个快照并查询验证。用户指定的范围优先，例如仅测试用例管理时无需开跑。不要自动删除试用数据或额外归档源会话。
