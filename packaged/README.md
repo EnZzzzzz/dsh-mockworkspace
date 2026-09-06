@@ -33,6 +33,23 @@ bundle 机制装进 web profile，重启 dsh 后自动加载，不再依赖会�
 
 ## 构建与安装
 
+归档构建由 `src/archive.js` 负责：含 `scripts.build` 的项目先在临时副本中构建，
+不会把源码 `index.html` 或 `work/page.html` 当成完成的网页，也不修改原项目配置
+或正在使用的 `.next`。已有依赖通过链接复用；安装时按 lockfile 选择包管理器，
+执行 build 使用 npm，并补齐桌面进程常缺少的用户工具 PATH。
+
+Next.js 项目在副本中启用 [静态导出](https://nextjs.org/docs/app/guides/static-exports)，
+收集完整 `out/`；需要服务端功能、无法静态导出的项目会明确返回构建失败。
+HTML、脚本动态加载路径、CSS 字体路径及本地图片均调整到归档目录。
+构建失败只写 `build-failure.json`，不提交成功记录、不触发 Client 隐藏会话。
+纯文本会话没有网页时仍允许仅归档轨迹。
+
+验证：`node --test packaged/src/archive.test.js`。
+补救指定旧记录：`node packaged/repair-archives.mjs /absolute/path/to/record.json [...]`。
+补救使用当前批次源文件重建，记录 `repairedAt` 和来源，备份旧记录并保留旧快照，
+不会冒充归档当时的文件状态。正式插件构建后需重新加载 Host 才启用新逻辑；
+`runtime-plugin/` 动态版本为独立实现，未同步本次正式版归档改动。
+
 ```sh
 cd packaged
 /usr/local/bin/node build.mjs     # 产出 lib/index.js + lib/client.js

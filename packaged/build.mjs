@@ -39,5 +39,6 @@ ${clientSrc}
 
 await mkdir(new URL('lib', import.meta.url), { recursive: true })
 await writeFile(new URL('lib/index.js', import.meta.url), hostSrc)
+await writeFile(new URL('lib/archive.js', import.meta.url), await readFile(new URL('src/archive.js', import.meta.url), 'utf8'))
 await writeFile(new URL('lib/client.js', import.meta.url), client)
 console.log('built lib/index.js + lib/client.js')
