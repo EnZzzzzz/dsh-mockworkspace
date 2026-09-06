@@ -17,6 +17,7 @@
  *   MOCK_ROOT          mock 根（默认读 ~/.dsh/mock-workspace.json，退回 process.cwd()）
  */
 
+import { createOperations } from './operations.mjs'
 import http from 'node:http'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
@@ -63,6 +64,16 @@ const RUNS_DIR = path.join(MOCK_ROOT, 'runs')
 // 由 dsh mock 插件归档会话时写入（Host 只写文件，不依赖 Hub 在线）；Hub 启动后
 // 扫描此处出「用例迭代」时间线。case-library 与用例库 DB 同根，语义一致。
 const ARCHIVES_DIR = path.join(MOCK_ROOT, 'case-library', 'archives')
+
+const operations = createOperations({
+  root: MOCK_ROOT, rpc: dshRpc, hash: promptHash,
+  getCase(setId, caseId) {
+    const db = libOpen()
+    const row = db.prepare('SELECT * FROM cases WHERE set_id = ? AND id = ?').get(setId, caseId)
+    if (!row) throw new Error('用例不存在')
+    return libCaseView(row, libAttachmentsOf(db, setId, caseId))
+  },
+})
 
 // ---------------------------------------------------------------- node/npm 解析
 // Hub 进程的 PATH 可能极简（如 launchd/裸 sh 环境没有 /usr/local/bin），
@@ -1701,6 +1712,14 @@ const server = http.createServer(async (req, res) => {
       return
     }
 
+    if (req.method === 'POST' && ['/api/tasks/create', '/api/iterations/create', '/api/iterations/snapshot'].includes(urlPath)) {
+      const body = await readBody(req)
+      const value = urlPath === '/api/tasks/create'
+        ? await operations.createTask(body)
+        : await operations.archive(body, urlPath.endsWith('/snapshot') ? 'snapshot' : 'archive')
+      sendJson(res, 200, { ok: true, value })
+      return
+    }
     if (urlPath === '/api/state' && req.method === 'GET') {
       sendJson(res, 200, { ok: true, value: await apiState() })
       return

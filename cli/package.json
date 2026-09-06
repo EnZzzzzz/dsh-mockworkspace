@@ -1,0 +1,9 @@
+{
+  "name": "mock-workspace-cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": { "mock-workspace": "index.mjs" },
+  "engines": { "node": ">=22.5" },
+  "scripts": { "test": "node --test *.test.mjs" }
+}

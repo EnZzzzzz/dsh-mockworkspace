@@ -198,3 +198,10 @@ archives/<batchId>/<ts>/
 - 轨迹分页固定拉最近 2000 条消息；超长会话只显示尾部
 - Node 产物非 vite/next 时只注入 `PORT`，不认 `PORT` 的老式服务需用
   `artifact.json` 显式声明 command
+
+## Agent / CLI 调用
+
+新增 `mock-workspace` CLI，安装与完整命令见 [CLI 文档](../cli/README.md)。
+Hub 补充 `POST /api/tasks/create`、`POST /api/iterations/create`、
+`POST /api/iterations/snapshot`，支持无需浏览器创建任务、归档和快照。
+启动已有服务时需重启加载新接口；这些操作需要 dsh 后端在线。

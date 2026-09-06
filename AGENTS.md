@@ -1,8 +1,55 @@
-# AGENTS.md — dsh 插件开发指南
+# AGENTS.md — Mock Workspace 使用与 dsh 插件开发指南
 
-本文件面向在本仓库工作的 Agent 与开发者，详细说明 **dsh（DeepSeek Harness）动态插件**（Dynamic Cordis Plugin）的开发方法：核心概念、开发工作流、Host/Client 平台选择、编码约束、生命周期管理、调试与修复。
+本文件面向使用和开发 Mock Workspace 的 Agent：先介绍 CLI 调用与试用 Skill，再说明 **dsh（DeepSeek Harness）动态插件**（Dynamic Cordis Plugin）的开发方法，包括 Host/Client 平台选择、编码约束、生命周期管理、调试与修复。
 
 > 本仓库是 dsh 插件实验场：`runtime-plugin/host.js` 与 `runtime-plugin/client.js` 是直接交给 `cordis_define` 的插件源码原文，`packaged/` 是正式打包版本，可对照阅读作为参考实现。
+
+---
+
+## Agent 使用入口：CLI 与试用 Skill
+
+**使用 Mock Workspace 已有功能时优先调用 CLI**，包括用例管理、添加/导入用例、附件、创建任务、查询轨迹、归档和快照。无需浏览器或动态插件；下文 Cordis inspect/define/run 流程适用于动态插件开发，不是调用 CLI 的前置要求。
+
+- CLI 完整说明：[cli/README.md](cli/README.md)。
+- 可分发的试用 Skill：[skills/mock-workspace/SKILL.md](skills/mock-workspace/SKILL.md)。安装方法见 CLI 文档的「安装试用 Skill」。该 Skill 只依赖 CLI 和服务，不依赖本仓库 AGENTS.md 才能使用。
+- 仓库内可直接 `node cli/index.mjs ...`；安装 `npm install -g ./cli` 后使用 `mock-workspace ...`。
+
+### 首次调用
+
+```sh
+node cli/index.mjs schema
+node cli/index.mjs state --timeout 10000
+```
+
+以 `schema` 返回的命令/参数为准。Hub 默认地址 `http://127.0.0.1:4780`，支持环境变量 `MOCK_WORKSPACE_URL` 或 `--url`。用例操作只需要 Hub；任务、归档和快照还需要 Hub 配置的 dsh 后端在线。沿用现有 MOCK_ROOT 与 DSH_API，不为连接失败另建数据根。
+
+### 常用操作
+
+| 目的 | 命令 |
+| --- | --- |
+| 查看集 / 查询用例 | `set list` / `case list --set-id SET_ID` |
+| 添加到已有集 | `case add --set-id SET_ID --source-ref REF --prompt TEXT` |
+| 新建集并添加首条用例 | `case add --name NAME --prompt TEXT` |
+| 导入数据 | `case preview --path PATH`，检查列名后 `case import --data @import.json` |
+| 用例开跑 | `task create --set-id SET_ID --case-id CASE_ID` |
+| 直接创建任务 | `task create --data @task.json`，含非空 `prompt` |
+| 查进度 / 轨迹 | `task sessions --batch-id BATCH_ID` / `task events --session-id SESSION_ID` |
+| 保存中途快照 | `snapshot create --batch-id BATCH_ID --session-id SESSION_ID --note TEXT` |
+| 终点归档 | `archive create --batch-id BATCH_ID --session-id SESSION_ID` |
+| 查询归档和快照 | `archive list --case-id CASE_ID` |
+
+表内命令均接在 `mock-workspace` 或 `node cli/index.mjs` 后。CLI 选项用 kebab-case，`--data` JSON 字段用 camelCase。长提示词使用 JSON 文件或标准输入，避免 shell 插值。
+
+### 操作语义与完成判断
+
+1. 从服务响应读取真实 ID：添加用例返回 `value.set.id`，再查询 `case list` 取得 caseId；不能把显示名称当 ID。查询分页每页最多 200。
+2. `task create` 会创建批次和 dsh 会话并提交提示词，可能实际运行模型。返回 `accepted:true` 仅代表提交成功；结合 sessions 和 events 确认执行结束、错误或等待状态，再报告结果。
+3. 快照和归档都要求会话已停止运行、产物不再修改。快照隐藏分叉会话，保留原会话；归档隐藏原会话。按用户要求选操作，不将两者作为必须连续执行的步骤。
+4. 成功 stdout 为 `{ok:true,value}`；失败 stderr 为 `{ok:false,error}`、退出码 1。检查 `value.warning`、附件 errors 和导入 missingFiles，保留部分成功的信息。
+5. 写操作超时不等于没有执行；先查询已生成的任务/归档，保留错误中的 batchId/sessionId，避免重复创建。
+6. 安装 Skill 不意味着启动任务；仅在用户要求试用或开跑时执行相应流程。不自动删除试用数据，`set delete` 会删除整集与附件，且当前不支持单条用例编辑/删除。
+
+CLI/Hub 改动使用 `node --test cli/*.test.mjs` 验证：临时数据和模拟 dsh，不启动真实模型。动态插件开发仍遵循以下指南。
 
 ---
 

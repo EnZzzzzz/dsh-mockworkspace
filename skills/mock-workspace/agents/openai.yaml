@@ -1,0 +1,3 @@
+interface:
+  display_name: "Mock Workspace 试用"
+  short_description: "通过 CLI 管理实验用例、创建任务、检查运行结果并保存会话快照"
