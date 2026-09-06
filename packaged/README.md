@@ -2,7 +2,7 @@
 
 把 `runtime-plugin/`（动态插件）包装成**正式安装的 dsh 插件包**：通过 profile
 bundle 机制装进 web profile，重启 dsh 后自动加载，不再依赖会话内的
-`cordis_define`/`cordis_run`。侧边栏出现第三个 tab **「Mock 实验场」**。
+`cordis_define`/`cordis_run`。页面右上角全局视图入口旁出现 **「Mock 实验场」**，点击打开大尺寸 Tab 工作台。
 
 ## 与动态插件（runtime-plugin）的差异
 
@@ -84,9 +84,9 @@ cd packaged
 ## 验证
 
 重启后：
-- 侧边栏出现第三个烧杯 tab「Mock 实验场」。
-- `cordis_inspect_query`（client / Slots / listSubTree，root 分别传
-  `sidebar.activity`、`sidebar.panel`）确认新增 `mock` entry `active: true`。
+- 右上角全局视图入口旁出现烧杯按钮「Mock 实验场」。
+- `cordis_inspect_query`（client / Slots / listSubTree，root 传 `shell.overlay`）
+  确认新增 `mock-cases` entry `active: true`。
 - 点「+ 新建」输入名字 → 创建 `<mock 根>/runs/<id>/`
   （meta.json）并打开普通对话会话。
 - 展开批次 → 「+ 新会话」可在该批次目录再开会话。
@@ -131,9 +131,7 @@ API 由 artifact-hub 承载（SQLite：`<mock 根>/case-library/library.db`，�
 
 ## 产物托管入口（artifact-hub）
 
-面板「产物托管」卡片的**地球图标按钮**：打开**「用例结果」悬浮窗**（注册在
-`shell.overlay`，id `mock-cases`，order 20）——**任何界面可用**（新建会话页 /
-对话中都能打开），标题栏可拖动、右上角关闭。窗口内是**静态用例结果展示，
+右上角烧杯按钮打开注册在 `shell.overlay`（id `mock-cases`，order 20）的大尺寸工作台，**任何界面可用**（新建会话页 / 对话中都能打开）。工作台包含**「用例 / 会话记录 / 结果」**三个 Tab，「结果」内是**静态用例结果展示，
 只显示有归档结果的用例**：卡片列表由归档记录（`/api/iterations`）驱动、按
 最近归档时间倒序；每个用例一张卡片（原始信息：sourceRef / 用例集徽标 /
 标签 / prompt），点开卡片展开该用例的历史会话记录（归档时间线）——点

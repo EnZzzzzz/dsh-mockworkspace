@@ -1,6 +1,6 @@
 # dsh-mock-workspace — Mock 实验场运行时插件
 
-在 dsh 左侧边栏新增第三个 tab **「Mock 实验场」**（图标：烧杯），用于管理
+在 dsh 右上角全局视图入口旁新增 **「Mock 实验场」**（图标：烧杯），打开大尺寸工作台，用于管理
 「命名工作区」实验场：每个实验是一个**批次 batch**（`runs/<batchId>/`
 独立目录），打开**普通对话会话**（轨迹 = DSH 会话日志，产物 = 会话生成的文件）。
 
@@ -58,9 +58,7 @@ dsh-mockworkspace/                       ← Mock 根（当前会话工作区）
 | `mock.open-hub` | – | 回退：打开产物托管页（artifact-hub，macOS `open`） |
 | `mock.start-hub` | `{ dshApi }` | nohup 后台拉起 artifact-hub/server.mjs（日志 `artifact-hub/hub.log`），`DSH_API` 取面板 `location.origin`，curl 轮询就绪 |
 
-面板「产物托管」卡片另有**地球图标按钮**：打开**「用例结果」悬浮窗**
-（`shell.overlay`，id `mock-cases`，order 20，任何界面可用、标题栏可拖动）。
-窗口内是静态用例卡片视图，**只显示有归档结果的用例**（归档驱动、按最近归档
+工作台注册在 `shell.overlay`（id `mock-cases`，order 20），任何界面可用，并按**「用例 / 会话记录 / 结果」**三个 Tab 组织。「结果」内是静态用例卡片视图，**只显示有归档结果的用例**（归档驱动、按最近归档
 倒序）：每用例一张卡片（sourceRef/用例集徽标/标签/prompt），点开展开历史会话
 记录（归档时间线）——「预览」在内置浏览器打开快照（复用同一预览 Tab），
 「轨迹」在窗口内展开执行时间线。数据直连 Hub JSON API（`/api/library/

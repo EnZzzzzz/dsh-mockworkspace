@@ -1,5 +1,5 @@
 // dsh-mock-workspace — runtime plugin Client half.
-// 在左侧边栏注册第三个 tab「Mock」（id: mock，order: 3）：临时实验场面板。
+// 在页面右上角全局视图入口旁注册「Mock 实验场」：大尺寸、Tab 式工作台。
 // 面板职责（只做入口与组织，不做自动执行）：
 //   - 「+ 新建」：输入名字 → Host 建 runs/<batch>/ 目录 + meta.json →
 //     session.create({ cwd }) 开一个 cwd 指向批次目录的普通对话会话
@@ -104,6 +104,11 @@ return {
     // ---- styles (own prefix dshmw-, theme tokens only) ----
     const CSS = `
 .dshmw-root{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;box-sizing:border-box;padding:4px 8px 8px;overflow-y:auto;overflow-x:hidden}
+.dshmw-root-workspace{padding:14px 16px 18px;gap:12px}
+.dshmw-root-workspace .dshmw-card{max-width:none}
+.dshmw-root-workspace .dshmw-cardbody{padding:10px}
+.dshmw-root-workspace .dshmw-libscroll{max-height:none;flex:1;min-height:0}
+.dshmw-root-workspace .dshmw-artgrid{grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
 .dshmw-header{flex:none;display:flex;align-items:center;justify-content:space-between;gap:4px;height:28px;padding:0 2px 0 6px;box-sizing:border-box;color:var(--dsw-alias-label-secondary)}
 .dshmw-title{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:13px;font-weight:600}
 .dshmw-headbtn{flex:none;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:none;border-radius:6px;padding:0;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary)}
@@ -259,11 +264,21 @@ return {
 .dshmw-composerhint{flex:1;min-width:0;font-size:11px;color:var(--dsw-alias-label-secondary);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .dshmw-composerrow .dshmw-submit{flex:none}
 .dshmw-cases{box-sizing:border-box;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:12px 16px 20px;display:flex;flex-direction:column;gap:10px}
-.dshmw-casesoverlay{position:fixed;top:48px;left:50%;transform:translateX(-50%);z-index:1200;width:min(1000px,calc(100% - 96px));height:calc(100% - 96px);box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:var(--dsw-alias-bg-base);box-shadow:var(--dsw-shadow-lv2);display:flex;flex-direction:column;overflow:hidden;pointer-events:auto}
-.dshmw-casesoverlay-bar{flex:none;display:flex;align-items:center;gap:8px;height:38px;padding:0 10px 0 14px;box-sizing:border-box;border-bottom:1px solid var(--dsw-alias-border-l1);cursor:grab;user-select:none;color:var(--dsw-alias-label-primary)}
-.dshmw-casesoverlay-bar:active{cursor:grabbing}
-.dshmw-casesoverlay-title{flex:1;min-width:0;font-size:13px;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.dshmw-launcher{position:absolute;top:54px;right:72px;z-index:20001;display:flex;align-items:center;padding:2px;border-radius:999px;background:var(--dsw-alias-bg-overlay);border:1px solid var(--dsw-alias-border-l1);box-shadow:0 2px 10px rgba(0,0,0,.08);pointer-events:auto}
+.dshmw-launcherbtn{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:none;border-radius:50%;padding:0;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary)}
+.dshmw-launcherbtn:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
+.dshmw-launcherbtn.active,.dshmw-launcherbtn.active:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
+.dshmw-workspacebackdrop{position:fixed;inset:0;z-index:20000;background:rgba(0,0,0,.35);pointer-events:auto}
+.dshmw-casesoverlay{position:fixed;top:24px;left:50%;transform:translateX(-50%);z-index:20002;width:min(1180px,calc(100% - 64px));height:min(840px,calc(100% - 48px));box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);border-radius:14px;background:var(--dsw-alias-bg-base);box-shadow:0 12px 40px rgba(0,0,0,.25);display:flex;flex-direction:column;overflow:hidden;pointer-events:auto}
+.dshmw-casesoverlay-bar{flex:none;display:flex;align-items:center;gap:14px;min-height:52px;padding:0 12px 0 18px;box-sizing:border-box;border-bottom:1px solid var(--dsw-alias-border-l1);user-select:none;color:var(--dsw-alias-label-primary)}
+.dshmw-casesoverlay-title{flex:none;font-size:14px;font-weight:600;white-space:nowrap}
+.dshmw-workspacetabs{flex:1;min-width:0;align-self:stretch;display:flex;align-items:stretch;gap:4px}
+.dshmw-workspacetab{position:relative;display:inline-flex;align-items:center;justify-content:center;min-width:88px;padding:0 14px;border:none;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13px;cursor:pointer}
+.dshmw-workspacetab:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1)}
+.dshmw-workspacetab.active{color:var(--dsw-alias-label-primary);font-weight:600}
+.dshmw-workspacetab.active:after{content:'';position:absolute;left:16px;right:16px;bottom:0;height:2px;border-radius:2px;background:var(--dsw-alias-state-business-primary)}
 .dshmw-casesoverlay-body{flex:1;min-height:0;display:flex;flex-direction:column}
+@media(max-width:760px){.dshmw-launcher{right:72px}.dshmw-casesoverlay{top:12px;width:calc(100% - 24px);height:calc(100% - 24px)}.dshmw-casesoverlay-bar{gap:6px;padding-left:10px}.dshmw-casesoverlay-title{display:none}.dshmw-workspacetab{min-width:0;flex:1;padding:0 6px}.dshmw-cases-cols{flex-direction:column}.dshmw-cases-left{width:100%;max-height:36%}}
 .dshmw-caseshead{flex:none;display:flex;align-items:center;gap:8px;min-height:28px;flex-wrap:wrap}
 .dshmw-casestitle{flex:none;font-size:14px;font-weight:600;color:var(--dsw-alias-label-primary)}
 .dshmw-casesstatus{flex:none;font-size:11px;color:var(--dsw-alias-label-secondary)}
@@ -1364,7 +1379,7 @@ return {
         open ? React.createElement('div', { className: 'dshmw-batchbody' },
           newSessionRow,
           sessionIds.map((id) => {
-            const sum = sessionsById[id]
+            const sum = sessionsById[id] || { title: '会话 ' + String(id).slice(0, 12), updatedAt: null, blank: false }
             const running = sum && sum.running === true
             return React.createElement('div', { key: id },
               React.createElement('div', { className: 'dshmw-sessrow' },
@@ -1466,7 +1481,7 @@ return {
 
     // ---- panel entry ----
     function MockPanel(props) {
-      if (props.activePanelId !== props.panelId) return null
+      if (props.panelId && props.activePanelId !== props.panelId) return null
 
       const sessions = props.useSessions ? props.useSessions((s) => s) : undefined
       const [showForm, setShowForm] = React.useState(false)
@@ -1603,6 +1618,7 @@ return {
       const visibleBatches = batches === null ? null : batches.flatMap((batch) => {
         if (batch.meta && batch.meta.status === 'archived') return []
         const sessionIds = (batch.sessionIds || []).filter((id) => {
+          if (!sessions) return !archivedSessionIds.has(id)
           const session = sessionsById[id]
           return session !== undefined && session.blank !== true && !archivedSessionIds.has(id)
         })
@@ -2042,7 +2058,8 @@ return {
           '打开'),
       }, hubBody)
 
-      return React.createElement('div', { className: 'dshmw-root' }, header,
+      const workspaceView = props.workspaceView || 'all'
+      return React.createElement('div', { className: 'dshmw-root' + (workspaceView === 'all' ? '' : ' dshmw-root-workspace') }, header,
         showSettings ? React.createElement(SettingsForm, {
           key: 'settings',
           rootPath,
@@ -2052,10 +2069,12 @@ return {
             setReloadKey((k) => k + 1)
           },
         }) : null,
-        hubCard,
-        batchCard,
-        libCard,
-        rootPath ? React.createElement('div', { className: 'dshmw-rootpath', title: rootPath }, '根: ' + rootPath) : null)
+        workspaceView === 'all' ? hubCard : null,
+        workspaceView === 'all' || workspaceView === 'sessions' ? batchCard : null,
+        workspaceView === 'all' || workspaceView === 'cases' ? libCard : null,
+        (workspaceView === 'all' || workspaceView === 'sessions') && rootPath
+          ? React.createElement('div', { className: 'dshmw-rootpath', title: rootPath }, '根: ' + rootPath)
+          : null)
     }
 
     // ---- 「用例结果」视图（悬浮窗内容）：双栏布局 ----
@@ -2488,7 +2507,7 @@ return {
           : null)
     }
 
-    // ---- 「用例结果」悬浮窗（shell.overlay，任何界面可用，含新建会话页） ----
+    // ---- Mock 工作台（shell.overlay）：用例 / 会话记录 / 结果 ----
     let casesPanelOpen = false
     const casesPanelListeners = new Set()
     function setCasesPanelOpen(open) {
@@ -2499,60 +2518,66 @@ return {
 
     function CasesOverlayPanel(props) {
       const [open, setOpen] = React.useState(casesPanelOpen)
-      const panelRef = React.useRef(null)
-      const dragRef = React.useRef({ x: 0, y: 0, offX: 0, offY: 0 })
+      const [tab, setTab] = React.useState('results')
       React.useEffect(() => {
         const l = () => setOpen(casesPanelOpen)
         casesPanelListeners.add(l)
         return () => casesPanelListeners.delete(l)
       }, [])
-      if (!open) return null
-      // 标题栏拖动移动悬浮窗（直接改 style，不触发重渲染）
-      const onBarDown = (e) => {
-        const el = panelRef.current
-        if (!el) return
-        const r = el.getBoundingClientRect()
-        dragRef.current = { x: e.clientX, y: e.clientY, offX: r.left, offY: r.top }
-        const onMove = (ev) => {
-          el.style.left = (dragRef.current.offX + ev.clientX - dragRef.current.x) + 'px'
-          el.style.top = (dragRef.current.offY + ev.clientY - dragRef.current.y) + 'px'
-          el.style.transform = 'none'
-        }
-        const onUp = () => {
-          window.removeEventListener('mousemove', onMove)
-          window.removeEventListener('mouseup', onUp)
-        }
-        window.addEventListener('mousemove', onMove)
-        window.addEventListener('mouseup', onUp)
-      }
-      return React.createElement('div', { ref: panelRef, className: 'dshmw-casesoverlay', role: 'dialog', 'aria-label': '用例结果' },
-        React.createElement('div', { className: 'dshmw-casesoverlay-bar', onMouseDown: onBarDown, title: '拖动移动位置' },
-          React.createElement('span', { className: 'dshmw-casesoverlay-title' }, '用例结果'),
+      React.useEffect(() => {
+        if (!open || typeof document === 'undefined') return
+        const onKey = (e) => { if (e.key === 'Escape') setCasesPanelOpen(false) }
+        document.addEventListener('keydown', onKey)
+        return () => document.removeEventListener('keydown', onKey)
+      }, [open])
+      const launcher = React.createElement('div', { className: 'dshmw-launcher' },
+        React.createElement('button', {
+          type: 'button',
+          className: 'dshmw-launcherbtn' + (open ? ' active' : ''),
+          title: 'Mock 实验场',
+          'aria-label': 'Mock 实验场',
+          'aria-pressed': open,
+          onClick: toggleCasesPanel,
+        }, React.createElement(SvgIcon, { d: ICONS.beaker, size: 16 })))
+      if (!open) return launcher
+      const tabs = [['cases', '用例'], ['sessions', '会话记录'], ['results', '结果']]
+      return React.createElement(React.Fragment, null,
+        React.createElement('div', {
+          className: 'dshmw-workspacebackdrop',
+          onMouseDown: (e) => { if (e.target === e.currentTarget) setCasesPanelOpen(false) },
+        }),
+        React.createElement('div', { className: 'dshmw-casesoverlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Mock 实验场' },
+        React.createElement('div', { className: 'dshmw-casesoverlay-bar' },
+          React.createElement('span', { className: 'dshmw-casesoverlay-title' }, 'Mock 实验场'),
+          React.createElement('div', { className: 'dshmw-workspacetabs', role: 'tablist', 'aria-label': '实验场视图' },
+            tabs.map((item) => React.createElement('button', {
+              key: item[0],
+              type: 'button',
+              role: 'tab',
+              className: 'dshmw-workspacetab' + (tab === item[0] ? ' active' : ''),
+              'aria-selected': tab === item[0],
+              onClick: () => setTab(item[0]),
+            }, item[1]))),
           React.createElement('button', {
             type: 'button',
-            className: 'dshmw-cardbtn',
+            className: 'dshmw-headbtn',
             title: '关闭',
+            'aria-label': '关闭 Mock 实验场',
             onClick: () => setCasesPanelOpen(false),
           }, '✕')),
         React.createElement('div', { className: 'dshmw-casesoverlay-body' },
-          React.createElement(CasesResultView, null)))
+          tab === 'results'
+            ? React.createElement(CasesResultView, null)
+            : React.createElement(MockPanel, { workspaceView: tab, useSessions: props.useSessions }))),
+        launcher)
     }
 
     // ---- registrations: 等 shell 声明槽位后纯增量注册 ----
     ctx.effect(() => {
       const disposers = [disposeCss, disposeCtxUI]
-      disposers.push(slots.inject('sidebar.activity', () => slots.register(
-        { name: 'sidebar.activity', id: PANEL_ID, order: ORDER, priority: -1, inject: () => ({ panelId: PANEL_ID }) },
-        MockIcon,
-      )))
-      disposers.push(slots.inject('sidebar.panel', () => slots.register(
-        { name: 'sidebar.panel', id: PANEL_ID, order: ORDER, priority: -1, inject: () => ({ panelId: PANEL_ID }) },
-        MockPanel,
-      )))
-      // 「用例结果」悬浮窗：shell.overlay（任何界面可用，含新建会话页——
-      // 那里没有会话头部 Tab）。关闭时组件返回 null，不遮挡界面。
+      // 右上角入口 + 大尺寸 Tab 工作台，任何界面可用。
       disposers.push(slots.inject('shell.overlay', () => slots.register(
-        { name: 'shell.overlay', id: 'mock-cases', order: 20, label: () => '用例结果' },
+        { name: 'shell.overlay', id: 'mock-cases', order: 20, label: () => 'Mock 实验场' },
         CasesOverlayPanel,
       )))
       // chain 接管：mock 空白会话的 composer（详见 selectMockBlankComposer 注释）。

@@ -1,6 +1,6 @@
 {
   "name": "dsh-mock-workspace",
-  "description": "dsh Web UI plugin (formal installable bundle): adds a 'Mock 实验场' sidebar tab for query × skill-version experiments — each batch gets an isolated runs/<id>/ directory (meta.json + workspace registration) and a normal chat session whose cwd points at it. Trace = DSH session log, artifacts = files the session produces.",
+  "description": "dsh Web UI plugin (formal installable bundle): adds a global 'Mock 实验场' tabbed workspace for cases, sessions, and results — each batch gets an isolated runs/<id>/ directory and a normal chat session whose cwd points at it.",
   "version": "0.1.0",
   "private": true,
   "type": "module",
