@@ -108,6 +108,13 @@ return {
 .dshmw-root-workspace .dshmw-card{max-width:none}
 .dshmw-root-workspace .dshmw-cardbody{padding:10px}
 .dshmw-root-workspace .dshmw-libscroll{max-height:none;flex:1;min-height:0}
+.dshmw-root-workspace .dshmw-libscroll{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));align-items:start;gap:14px;padding:4px 2px 12px}
+.dshmw-root-workspace .dshmw-librow{min-width:0;min-height:210px;margin:0;padding:16px;gap:12px;border-radius:12px;background:var(--dsw-alias-bg-base)}
+.dshmw-root-workspace .dshmw-librow:hover{border-color:var(--dsw-alias-border-l2);box-shadow:var(--dsw-shadow-lv1)}
+.dshmw-root-workspace .dshmw-libref{font-size:13px;font-weight:600;opacity:1;color:var(--dsw-alias-label-primary)}
+.dshmw-root-workspace .dshmw-libprompt{font-size:14px;line-height:22px;-webkit-line-clamp:4;overflow-wrap:anywhere;color:var(--dsw-alias-label-primary)}
+.dshmw-root-workspace .dshmw-librow .dshmw-tags{margin-top:auto}
+.dshmw-root-workspace .dshmw-librow .dshmw-tag{font-size:11px;line-height:20px}
 .dshmw-root-workspace .dshmw-artgrid{grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
 .dshmw-header{flex:none;display:flex;align-items:center;justify-content:space-between;gap:4px;height:28px;padding:0 2px 0 6px;box-sizing:border-box;color:var(--dsw-alias-label-secondary)}
 .dshmw-title{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:13px;font-weight:600}
@@ -504,27 +511,37 @@ return {
     // （排队中的导航不会更新 → 每次点击都会新建 Tab，越开越多）。这里维护一个
     // 稳定的 Tab id 优先复用，丢了再按 Hub URL 前缀找，都没有才新建。
     let browserPreviewTabId = null
+    let browserPreviewQueue = Promise.resolve()
     function openInBuiltinBrowser(url) {
       const ctrl = typeof window !== 'undefined' ? window.__dshBrowser : undefined
       if (!ctrl || typeof ctrl.command !== 'function') {
         try { window.open(url, '_blank', 'noopener') } catch (e) { /* ignore */ }
         return false
       }
-      const done = () => { try { activateViewByLabel('内置浏览器') } catch (e) { /* ignore */ } }
-      ctrl.command({ op: 'tab-list' }).then((res) => {
-        const tabs = res && Array.isArray(res.tabs) ? res.tabs : []
-        let tab = tabs.find((t) => t.id === browserPreviewTabId)
+      const command = async (payload) => {
+        const result = await ctrl.command(payload)
+        if (!result || result.ok !== true) throw new Error(result && result.error || '浏览器操作失败')
+        return result
+      }
+      const openPreview = async () => {
+        const res = await command({ op: 'tab-list' })
+        const tabs = Array.isArray(res.tabs) ? res.tabs : []
+        const tab = tabs.find((t) => t.id === browserPreviewTabId)
           || tabs.find((t) => typeof t.url === 'string' && t.url.startsWith(HUB_URL))
-        if (tab) {
-          browserPreviewTabId = tab.id
-          return ctrl.command({ op: 'tab-activate', id: tab.id }).then(() => ctrl.command({ op: 'navigate', url }))
+        const id = tab ? tab.id : (await command({ op: 'tab-new' })).id
+        if (typeof id !== 'number') throw new Error('浏览器未返回标签页 ID')
+        browserPreviewTabId = id
+        await command({ op: 'tab-activate', id })
+        await command({ op: 'navigate', url })
+        // navigate 负责打开浏览器视图；显式选中结果页，并检查实际选中状态。
+        await command({ op: 'tab-activate', id })
+        const state = await command({ op: 'tab-list' })
+        if (!Array.isArray(state.tabs) || !state.tabs.some((t) => t.id === id && t.active)) {
+          throw new Error('结果标签页未能自动选中，请在浏览器中手动选择')
         }
-        return ctrl.command({ op: 'tab-new' }).then((r) => {
-          if (r && typeof r.id === 'number') browserPreviewTabId = r.id
-          return ctrl.command({ op: 'navigate', url })
-        })
-      }).then(() => done())
-        .catch(() => { try { window.open(url, '_blank', 'noopener') } catch (e) { /* ignore */ } })
+      }
+      browserPreviewQueue = browserPreviewQueue.then(openPreview)
+        .catch((err) => showCtxToast('打开结果预览失败：' + errorText(err)))
       return true
     }
     function fmtDateTime(iso) {
@@ -597,8 +614,10 @@ return {
     // 在批次目录开一个普通对话会话：后端 session.create({ cwd }) 原子创建 cwd
     // 指向批次目录的会话（无 workspace 归属 → 会话面板归入「未分组」，空白期
     // 隐藏、首发消息后出现在未分组桶）→ sessions.open 打开。
-    function startBatchSession(batchPath) {
-      return apiCall('session.create', { cwd: batchPath }).then((value) => {
+    function startBatchSession(batchPath, agentPreset) {
+      const payload = { cwd: batchPath }
+      if (agentPreset) payload.agentPreset = agentPreset
+      return apiCall('session.create', payload).then((value) => {
         const sessionId = value && value.sessionId
         if (sessionId) {
           mockSessionIds.add(sessionId)
@@ -1081,17 +1100,28 @@ return {
     }
     function startCaseRun(c) {
       if (!c || !c.prompt) return
+      let designPresetId
       const name = (((c.setId || '') + ' · ' + (c.sourceRef || c.id || '用例')).replace(/^ · /, ''))
-      createBatch(name, {
+      apiCall('agentPreset.list', {}).then((value) => {
+        const presets = Array.isArray(value && value.presets) ? value.presets : []
+        const preset = presets.find((p) => p.id === 'design' && !p.broken)
+          || presets.find((p) => p.name === '设计模式' && !p.broken)
+        if (!preset) throw new Error('未找到可用的「设计模式」Agent 预设')
+        designPresetId = preset.id
+        return createBatch(name, {
         caseId: c.id || '',
         caseSetId: c.setId || '',
         sourceRef: c.sourceRef || '',
         promptHash: c.prompt ? fnvHash(c.prompt) : '',
+        })
       })
         .then((res) => {
           const batchPath = res && typeof res.batchPath === 'string' ? res.batchPath : ''
           if (batchPath === '') throw new Error('未返回批次目录')
-          return startBatchSession(batchPath).then(() => batchPath)
+          return startBatchSession(batchPath, designPresetId).then(() => {
+            setCasesPanelOpen(false)
+            return batchPath
+          })
         })
         .then((batchPath) => {
           const atts = Array.isArray(c.attachments) ? c.attachments : []
